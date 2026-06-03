@@ -111,25 +111,33 @@ class SimulationResult {
     required this.bands,
     required this.histogram,
     required this.summary,
+    this.comparison,
   });
 
   final PercentileBands bands;
   final Histogram histogram;
   final SummaryStats summary;
+  final SimulationResult? comparison;
 
-  factory SimulationResult.fromJson(Map<String, dynamic> json) =>
-      SimulationResult(
-        bands: PercentileBands.fromJson(
-            Map<String, dynamic>.from(json['bands'] as Map)),
-        histogram: Histogram.fromJson(
-            Map<String, dynamic>.from(json['histogram'] as Map)),
-        summary: SummaryStats.fromJson(
-            Map<String, dynamic>.from(json['summary'] as Map)),
-      );
+  factory SimulationResult.fromJson(Map<String, dynamic> json) {
+    final compRaw = json['comparison'];
+    return SimulationResult(
+      bands: PercentileBands.fromJson(
+          Map<String, dynamic>.from(json['bands'] as Map)),
+      histogram: Histogram.fromJson(
+          Map<String, dynamic>.from(json['histogram'] as Map)),
+      summary: SummaryStats.fromJson(
+          Map<String, dynamic>.from(json['summary'] as Map)),
+      comparison: compRaw == null
+          ? null
+          : SimulationResult.fromJson(Map<String, dynamic>.from(compRaw as Map)),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'bands': bands.toJson(),
         'histogram': histogram.toJson(),
         'summary': summary.toJson(),
+        if (comparison != null) 'comparison': comparison!.toJson(),
       };
 }

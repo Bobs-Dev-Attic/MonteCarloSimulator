@@ -9,12 +9,14 @@ class SimulationConfig {
     required this.inputs,
     this.nSims = 10000,
     this.seed,
+    this.compareGarch = false,
   });
 
   final String model;
   final Map<String, dynamic> inputs;
   final int nSims;
   final int? seed;
+  final bool compareGarch;
 
   /// Convenience constructor for a GBM portfolio forecast.
   factory SimulationConfig.gbm({
@@ -26,11 +28,13 @@ class SimulationConfig {
     double contributionPerStep = 0.0,
     int nSims = 10000,
     int? seed,
+    bool compareGarch = false,
   }) {
     return SimulationConfig(
       model: 'gbm',
       nSims: nSims,
       seed: seed,
+      compareGarch: compareGarch,
       inputs: {
         'beginning_value': beginningValue,
         'mu': mu,
@@ -73,11 +77,16 @@ class SimulationConfig {
   }
 
   /// Payload sent to the `runSimulation` callable function.
+  ///
+  /// Key names use snake_case here to match the Python Cloud Function
+  /// signature (e.g. `n_sims`, `compare_garch`). See [toJson] for the
+  /// Firestore camelCase form (`nSims`, `compareGarch`).
   Map<String, dynamic> toCallablePayload() => {
         'model': model,
         'inputs': inputs,
         'n_sims': nSims,
         if (seed != null) 'seed': seed,
+        if (compareGarch) 'compare_garch': true,
       };
 
   /// Serialized form stored in Firestore.
@@ -86,6 +95,7 @@ class SimulationConfig {
         'inputs': inputs,
         'nSims': nSims,
         if (seed != null) 'seed': seed,
+        if (compareGarch) 'compareGarch': true,
       };
 
   factory SimulationConfig.fromJson(Map<String, dynamic> json) {
@@ -94,6 +104,7 @@ class SimulationConfig {
       inputs: Map<String, dynamic>.from(json['inputs'] as Map),
       nSims: (json['nSims'] as num?)?.toInt() ?? 10000,
       seed: (json['seed'] as num?)?.toInt(),
+      compareGarch: (json['compareGarch'] as bool?) ?? false,
     );
   }
 }
