@@ -77,6 +77,10 @@ class SimulationConfig {
   }
 
   /// Payload sent to the `runSimulation` callable function.
+  ///
+  /// Key names use snake_case here to match the Python Cloud Function
+  /// signature (e.g. `n_sims`, `compare_garch`). See [toJson] for the
+  /// Firestore camelCase form (`nSims`, `compareGarch`).
   Map<String, dynamic> toCallablePayload() => {
         'model': model,
         'inputs': inputs,
