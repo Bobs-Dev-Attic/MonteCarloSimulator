@@ -18,6 +18,7 @@ class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
   final _formKey = GlobalKey<FormState>();
   String _model = 'gbm';
   bool _busy = false;
+  bool _compareGarch = false;
   String? _error;
 
   // GBM fields.
@@ -62,6 +63,7 @@ class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
         sigma: _d(_sigma) / 100,
         years: _d(_years),
         nSims: nSims,
+        compareGarch: _compareGarch,
       );
     }
     return SimulationConfig.retirement(
@@ -155,6 +157,18 @@ class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
         _numField(_mu, 'Expected annual return (%)'),
         _numField(_sigma, 'Volatility / std dev (%)'),
         _numField(_years, 'Time horizon (years)'),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            value: _compareGarch,
+            onChanged: (v) => setState(() => _compareGarch = v),
+            title: const Text('Compare with GARCH(1,1)'),
+            subtitle: const Text(
+              'Adds a second simulation with time-varying volatility, same average σ.',
+            ),
+          ),
+        ),
       ];
 
   List<Widget> _retirementFields() => [
