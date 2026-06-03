@@ -73,7 +73,7 @@ class _SimTile extends ConsumerWidget {
       trailing: IconButton(
         icon: const Icon(Icons.delete_outline),
         onPressed: () {
-          final user = ref.read(authStateProvider).valueOrNull;
+          final user = ref.read(authStateProvider).value;
           if (user != null) {
             ref
                 .read(firestoreServiceProvider)

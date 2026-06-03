@@ -20,7 +20,7 @@ final authStateProvider = StreamProvider<User?>((ref) {
 /// Live list of the signed-in user's saved simulations.
 final savedSimulationsProvider =
     StreamProvider.autoDispose<List<SavedSimulation>>((ref) {
-  final user = ref.watch(authStateProvider).valueOrNull;
+  final user = ref.watch(authStateProvider).value;
   if (user == null) return const Stream.empty();
   return ref.watch(firestoreServiceProvider).watchSimulations(user.uid);
 });

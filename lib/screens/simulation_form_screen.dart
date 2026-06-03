@@ -87,7 +87,7 @@ class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
       final config = _buildConfig();
       final result = await ref.read(simulationServiceProvider).run(config);
 
-      final user = ref.read(authStateProvider).valueOrNull;
+      final user = ref.read(authStateProvider).value;
       if (user != null) {
         await ref.read(firestoreServiceProvider).saveSimulation(
               uid: user.uid,
