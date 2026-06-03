@@ -77,8 +77,7 @@ def simulate_gbm_garch(
 
     for t in range(n_steps):
         z = rng.standard_normal(n_sims)
-        sigma_step = np.sqrt(h)
-        eps = sigma_step * z
+        eps = np.sqrt(h) * z
         # Per-step drift uses the *current* conditional variance for the Ito
         # correction so the expected log step is mu*dt regardless of clustering.
         drift = mu * dt - 0.5 * h

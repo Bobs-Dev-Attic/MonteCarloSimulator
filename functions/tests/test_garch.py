@@ -84,3 +84,24 @@ def test_terminal_tail_wider_than_gbm_on_average():
     # On average, GARCH spread should be >= GBM spread (volatility clustering
     # fattens tails). Allow a tiny negative tolerance to absorb sampling noise.
     assert float(np.mean(spreads)) > -100.0
+
+
+def test_rejects_bad_inputs():
+    with pytest.raises(ValueError):
+        simulate_gbm_garch(
+            beginning_value=-1, mu=0.07, sigma=0.15, years=10, n_sims=100
+        )
+    with pytest.raises(ValueError):
+        simulate_gbm_garch(
+            beginning_value=1000, mu=0.07, sigma=-0.1, years=10, n_sims=100
+        )
+    with pytest.raises(ValueError):
+        simulate_gbm_garch(
+            beginning_value=1000, mu=0.07, sigma=0.15, years=0, n_sims=100
+        )
+    with pytest.raises(ValueError):
+        # GARCH stationarity: alpha + beta must be < 1
+        simulate_gbm_garch(
+            beginning_value=1000, mu=0.07, sigma=0.15, years=10, n_sims=100,
+            alpha=0.15, beta=0.90,
+        )
