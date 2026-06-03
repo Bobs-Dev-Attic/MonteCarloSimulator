@@ -30,8 +30,10 @@ def test_run_gbm_with_comparison():
     comp = result["comparison"]
     assert comp["model"] == "gbm-garch"
     assert set(comp.keys()) >= {"bands", "histogram", "summary", "params", "model"}
-    # Same seed across both branches: paths share Z stream, so the GBM half
-    # is identical to a no-comparison call.
+    # Both calls use the same seed integer, so each simulation constructs its
+    # own RNG seeded identically. The GBM result is unaffected by the GARCH
+    # computation because simulate_gbm and simulate_gbm_garch each own
+    # independent RNG instances.
     bare = main._run_gbm(_BASE_INPUTS, n_sims=200, seed=1, compare_garch=False)
     assert result["bands"] == bare["bands"]
 

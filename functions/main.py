@@ -102,7 +102,9 @@ def runSimulation(req: https_fn.CallableRequest) -> dict:
     """Run a Monte Carlo simulation and return aggregated results.
 
     Request data: ``{ "model": "gbm"|"retirement", "inputs": {...},
-    "n_sims": int?, "seed": int? }``.
+    "n_sims": int?, "seed": int?, "compare_garch": bool? }``.
+    GBM only: when ``compare_garch`` is true, a ``"comparison"`` key is
+    added to the result containing a GARCH(1,1) run with the same inputs.
     """
     if req.auth is None:
         raise https_fn.HttpsError(
