@@ -83,8 +83,44 @@ class _ScrubFieldState extends State<ScrubField> {
     widget.onChanged(clamped);
   }
 
+  double _stepPerPixel() {
+    switch (widget.kind) {
+      case ScrubKind.integer:
+      case ScrubKind.years:
+        return 1.0;
+      case ScrubKind.percent:
+        return 0.1;
+      case ScrubKind.money:
+        final v = widget.value.abs();
+        return v < 100 ? 1.0 : v * 0.01;
+    }
+  }
+
+  double _accumDx = 0.0;
+  double _startValue = 0.0;
+
+  void _onDragStart(DragStartDetails _) {
+    _accumDx = 0.0;
+    _startValue = widget.value;
+  }
+
+  void _onDragUpdate(DragUpdateDetails details) {
+    _accumDx += details.delta.dx;
+    final next = _clamp(_startValue + _accumDx * _stepPerPixel());
+    if (next == widget.value) return;
+    widget.onChanged(next);
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    _accumDx += event.delta.dx;
+    final next = _clamp(_startValue + _accumDx * _stepPerPixel());
+    if (next == widget.value) return;
+    widget.onChanged(next);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return TextField(
       controller: _controller,
       onChanged: _onTextChanged,
@@ -92,6 +128,30 @@ class _ScrubFieldState extends State<ScrubField> {
       decoration: InputDecoration(
         labelText: widget.label,
         suffixText: widget.suffixText,
+        suffixIcon: MouseRegion(
+          cursor: SystemMouseCursors.resizeLeftRight,
+          child: GestureDetector(
+            key: const ValueKey('scrub-handle'),
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart: _onDragStart,
+            onHorizontalDragUpdate: _onDragUpdate,
+            child: Listener(
+              onPointerDown: (_) {
+                _accumDx = 0.0;
+                _startValue = widget.value;
+              },
+              onPointerMove: _onPointerMove,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Icon(
+                  Icons.drag_indicator,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ),
         border: const OutlineInputBorder(),
         isDense: true,
       ),

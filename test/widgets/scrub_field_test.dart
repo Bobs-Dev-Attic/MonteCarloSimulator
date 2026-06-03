@@ -58,4 +58,76 @@ void main() {
     await tester.pump();
     expect(emitted, isEmpty);
   });
+
+  testWidgets('dragging the handle right increases an integer value', (tester) async {
+    final emitted = <double>[];
+    await tester.pumpWidget(_harness(
+      initial: 10,
+      kind: ScrubKind.integer,
+      onChanged: emitted.add,
+    ));
+
+    final handle = find.byKey(const ValueKey('scrub-handle'));
+    expect(handle, findsOneWidget);
+
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(15, 0));
+    await gesture.up();
+    await tester.pump();
+
+    expect(emitted.last, 25.0);
+  });
+
+  testWidgets('dragging left below minValue clamps', (tester) async {
+    final emitted = <double>[];
+    await tester.pumpWidget(_harness(
+      initial: 5,
+      kind: ScrubKind.integer,
+      min: 0,
+      onChanged: emitted.add,
+    ));
+
+    final handle = find.byKey(const ValueKey('scrub-handle'));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(-20, 0));
+    await gesture.up();
+    await tester.pump();
+
+    expect(emitted.last, 0.0);
+  });
+
+  testWidgets('money kind scales step by current value', (tester) async {
+    final emitted = <double>[];
+    await tester.pumpWidget(_harness(
+      initial: 10000,
+      kind: ScrubKind.money,
+      onChanged: emitted.add,
+    ));
+
+    final handle = find.byKey(const ValueKey('scrub-handle'));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(10, 0));
+    await gesture.up();
+    await tester.pump();
+
+    // 1% of 10_000 per pixel * 10 px = +1_000.
+    expect(emitted.last, closeTo(11000.0, 0.1));
+  });
+
+  testWidgets('percent kind moves 0.1 per pixel', (tester) async {
+    final emitted = <double>[];
+    await tester.pumpWidget(_harness(
+      initial: 7.0,
+      kind: ScrubKind.percent,
+      onChanged: emitted.add,
+    ));
+
+    final handle = find.byKey(const ValueKey('scrub-handle'));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(20, 0));
+    await gesture.up();
+    await tester.pump();
+
+    expect(emitted.last, closeTo(9.0, 1e-9));
+  });
 }
