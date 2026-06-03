@@ -73,4 +73,89 @@ void main() {
       expect(result.summary.probLoss, 0.2);
     });
   });
+
+  group('GARCH comparison', () {
+    test('SimulationConfig.gbm carries compareGarch into payload and json', () {
+      final config = SimulationConfig.gbm(
+        beginningValue: 10000,
+        mu: 0.07,
+        sigma: 0.15,
+        years: 10,
+        compareGarch: true,
+      );
+      expect(config.compareGarch, isTrue);
+      expect(config.toCallablePayload()['compare_garch'], isTrue);
+      final round = SimulationConfig.fromJson(config.toJson());
+      expect(round.compareGarch, isTrue);
+    });
+
+    test('SimulationConfig defaults compareGarch to false', () {
+      final config = SimulationConfig.gbm(
+        beginningValue: 10000,
+        mu: 0.07,
+        sigma: 0.15,
+        years: 10,
+      );
+      expect(config.compareGarch, isFalse);
+      expect(config.toCallablePayload().containsKey('compare_garch'), isFalse);
+    });
+
+    test('SimulationResult parses optional comparison block', () {
+      final json = {
+        'bands': {
+          'steps': [0.0, 1.0],
+          'p5': [10000.0, 9500.0],
+          'p25': [10000.0, 9800.0],
+          'p50': [10000.0, 10100.0],
+          'p75': [10000.0, 10400.0],
+          'p95': [10000.0, 10800.0],
+        },
+        'histogram': {'counts': [1, 2, 1], 'edges': [9000.0, 10000.0, 11000.0, 12000.0]},
+        'summary': {
+          'mean': 10100.0, 'median': 10100.0,
+          'p5': 9500.0, 'p95': 10800.0,
+          'min': 9000.0, 'max': 12000.0,
+          'prob_loss': 0.2, 'var_95': 500.0, 'success_rate': 0.8,
+        },
+        'comparison': {
+          'model': 'gbm-garch',
+          'bands': {
+            'steps': [0.0, 1.0],
+            'p5': [10000.0, 9300.0],
+            'p25': [10000.0, 9700.0],
+            'p50': [10000.0, 10100.0],
+            'p75': [10000.0, 10500.0],
+            'p95': [10000.0, 11000.0],
+          },
+          'histogram': {'counts': [2, 1, 1], 'edges': [9000.0, 10000.0, 11000.0, 12000.0]},
+          'summary': {
+            'mean': 10100.0, 'median': 10100.0,
+            'p5': 9300.0, 'p95': 11000.0,
+            'min': 8800.0, 'max': 12200.0,
+            'prob_loss': 0.25, 'var_95': 700.0, 'success_rate': 0.75,
+          },
+        },
+      };
+      final result = SimulationResult.fromJson(json);
+      expect(result.comparison, isNotNull);
+      expect(result.comparison!.summary.p5, 9300.0);
+    });
+
+    test('SimulationResult.fromJson tolerates missing comparison', () {
+      final json = {
+        'bands': {
+          'steps': [0.0], 'p5': [1.0], 'p25': [1.0],
+          'p50': [1.0], 'p75': [1.0], 'p95': [1.0],
+        },
+        'histogram': {'counts': [1], 'edges': [0.0, 1.0]},
+        'summary': {
+          'mean': 1.0, 'median': 1.0, 'p5': 1.0, 'p95': 1.0,
+          'min': 1.0, 'max': 1.0, 'prob_loss': 0.0,
+          'var_95': 0.0, 'success_rate': 1.0,
+        },
+      };
+      final result = SimulationResult.fromJson(json);
+      expect(result.comparison, isNull);
+    });
+  });
 }
