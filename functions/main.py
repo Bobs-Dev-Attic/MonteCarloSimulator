@@ -12,16 +12,25 @@ from firebase_functions import https_fn, options
 
 from montecarlo import aggregate
 from montecarlo.gbm import simulate_gbm
+from montecarlo.garch import simulate_gbm_garch
 from montecarlo.retirement import simulate_retirement, success_rate
 
 # Bound compute/cost: never run more than this many paths per request.
 MAX_SIMS = 50_000
 DEFAULT_SIMS = 10_000
 
+GARCH_ALPHA = 0.10
+GARCH_BETA = 0.85
 
-def _run_gbm(inputs: dict, n_sims: int, seed: int | None) -> dict:
+
+def _run_gbm(
+    inputs: dict,
+    n_sims: int,
+    seed: int | None,
+    compare_garch: bool = False,
+) -> dict:
     beginning = float(inputs["beginning_value"])
-    paths = simulate_gbm(
+    gbm_kwargs = dict(
         beginning_value=beginning,
         mu=float(inputs["mu"]),
         sigma=float(inputs["sigma"]),
@@ -31,12 +40,30 @@ def _run_gbm(inputs: dict, n_sims: int, seed: int | None) -> dict:
         n_sims=n_sims,
         seed=seed,
     )
+    paths = simulate_gbm(**gbm_kwargs)
     terminal = paths[-1]
-    return {
+    result = {
         "bands": aggregate.percentile_bands(paths),
         "histogram": aggregate.terminal_histogram(terminal),
         "summary": aggregate.summary_stats(terminal, beginning),
     }
+
+    if compare_garch:
+        garch_paths = simulate_gbm_garch(
+            **gbm_kwargs,
+            alpha=GARCH_ALPHA,
+            beta=GARCH_BETA,
+        )
+        garch_terminal = garch_paths[-1]
+        result["comparison"] = {
+            "model": "gbm-garch",
+            "bands": aggregate.percentile_bands(garch_paths),
+            "histogram": aggregate.terminal_histogram(garch_terminal),
+            "summary": aggregate.summary_stats(garch_terminal, beginning),
+            "params": {"alpha": GARCH_ALPHA, "beta": GARCH_BETA},
+        }
+
+    return result
 
 
 def _run_retirement(inputs: dict, n_sims: int, seed: int | None) -> dict:
@@ -95,9 +122,13 @@ def runSimulation(req: https_fn.CallableRequest) -> dict:
     inputs = data.get("inputs") or {}
     n_sims = max(1, min(int(data.get("n_sims", DEFAULT_SIMS)), MAX_SIMS))
     seed = data.get("seed")
+    compare_garch = bool(data.get("compare_garch", False))
 
     try:
-        result = runner(inputs, n_sims, seed)
+        if runner is _run_gbm:
+            result = runner(inputs, n_sims, seed, compare_garch=compare_garch)
+        else:
+            result = runner(inputs, n_sims, seed)
     except KeyError as exc:
         raise https_fn.HttpsError(
             https_fn.FunctionsErrorCode.INVALID_ARGUMENT,
