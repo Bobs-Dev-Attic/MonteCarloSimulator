@@ -29,20 +29,21 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'REPLACE_ME',
-    appId: 'REPLACE_ME',
-    messagingSenderId: 'REPLACE_ME',
-    projectId: 'REPLACE_ME',
-    authDomain: 'REPLACE_ME.firebaseapp.com',
-    storageBucket: 'REPLACE_ME.appspot.com',
+    apiKey: 'AIzaSyCc3lpO7pJDm-4ylXpIn1WisvZ-ZWVHxwA',
+    appId: '1:364932956192:web:40e757eff838ac73993c45',
+    messagingSenderId: '364932956192',
+    projectId: 'montecarlosimulator-bda',
+    authDomain: 'montecarlosimulator-bda.firebaseapp.com',
+    storageBucket: 'montecarlosimulator-bda.firebasestorage.app',
+    measurementId: 'G-P3DK15V30T',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'REPLACE_ME',
-    appId: 'REPLACE_ME',
-    messagingSenderId: 'REPLACE_ME',
-    projectId: 'REPLACE_ME',
-    storageBucket: 'REPLACE_ME.appspot.com',
+    apiKey: 'AIzaSyAYcdeR36vT2iywKRAUpmQoaPMTiflUdHw',
+    appId: '1:364932956192:android:8855b2221f19e85b993c45',
+    messagingSenderId: '364932956192',
+    projectId: 'montecarlosimulator-bda',
+    storageBucket: 'montecarlosimulator-bda.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
