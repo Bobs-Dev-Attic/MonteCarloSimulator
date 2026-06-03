@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:monte_carlo_simulator/widgets/scrub_field.dart';
 
@@ -129,5 +130,43 @@ void main() {
     await tester.pump();
 
     expect(emitted.last, closeTo(9.0, 1e-9));
+  });
+
+  testWidgets('Shift held during drag scales by 10x', (tester) async {
+    final emitted = <double>[];
+    await tester.pumpWidget(_harness(
+      initial: 0,
+      kind: ScrubKind.integer,
+      onChanged: emitted.add,
+    ));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    final handle = find.byKey(const ValueKey('scrub-handle'));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(3, 0));
+    await gesture.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+
+    expect(emitted.last, 30.0); // 3 px * (1 * 10)
+  });
+
+  testWidgets('Alt held during drag scales by 0.1x', (tester) async {
+    final emitted = <double>[];
+    await tester.pumpWidget(_harness(
+      initial: 0,
+      kind: ScrubKind.percent,
+      onChanged: emitted.add,
+    ));
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    final handle = find.byKey(const ValueKey('scrub-handle'));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await gesture.moveBy(const Offset(10, 0));
+    await gesture.up();
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await tester.pump();
+
+    expect(emitted.last, closeTo(0.1, 1e-9)); // 10 px * 0.1 * 0.1
   });
 }

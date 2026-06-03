@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Family of value units a [ScrubField] can carry. Drives per-pixel
 /// drag sensitivity and (later) display formatting.
@@ -104,16 +105,34 @@ class _ScrubFieldState extends State<ScrubField> {
     _startValue = widget.value;
   }
 
+  double _modifierMultiplier() {
+    final shift = HardwareKeyboard.instance.isShiftPressed;
+    final alt = HardwareKeyboard.instance.isAltPressed;
+    double mult = 1.0;
+    if (shift) mult *= 10.0;
+    if (alt) {
+      // Fine-grain modifier only meaningful for sub-unit kinds.
+      if (widget.kind == ScrubKind.percent || widget.kind == ScrubKind.money) {
+        mult *= 0.1;
+      }
+    }
+    return mult;
+  }
+
   void _onDragUpdate(DragUpdateDetails details) {
     _accumDx += details.delta.dx;
-    final next = _clamp(_startValue + _accumDx * _stepPerPixel());
+    final next = _clamp(
+      _startValue + _accumDx * _stepPerPixel() * _modifierMultiplier(),
+    );
     if (next == widget.value) return;
     widget.onChanged(next);
   }
 
   void _onPointerMove(PointerMoveEvent event) {
     _accumDx += event.delta.dx;
-    final next = _clamp(_startValue + _accumDx * _stepPerPixel());
+    final next = _clamp(
+      _startValue + _accumDx * _stepPerPixel() * _modifierMultiplier(),
+    );
     if (next == widget.value) return;
     widget.onChanged(next);
   }
