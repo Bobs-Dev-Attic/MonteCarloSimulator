@@ -6,9 +6,10 @@ build/
 .flutter-plugins-dependencies
 pubspec.lock
 
-# IDE
+# IDE / tooling
 .idea/
 .vscode/
+.claude/
 *.iml
 
 # Python / Cloud Functions

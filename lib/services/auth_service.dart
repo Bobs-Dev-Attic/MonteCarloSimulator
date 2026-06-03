@@ -5,10 +5,14 @@ import 'package:google_sign_in/google_sign_in.dart';
 class AuthService {
   AuthService({FirebaseAuth? auth, GoogleSignIn? googleSignIn})
       : _auth = auth ?? FirebaseAuth.instance,
-        _googleSignIn = googleSignIn ?? GoogleSignIn();
+        _googleSignInOverride = googleSignIn;
 
   final FirebaseAuth _auth;
-  final GoogleSignIn _googleSignIn;
+  final GoogleSignIn? _googleSignInOverride;
+  GoogleSignIn? _googleSignInCached;
+
+  GoogleSignIn get _googleSignIn =>
+      _googleSignInOverride ?? (_googleSignInCached ??= GoogleSignIn());
 
   Stream<User?> authStateChanges() => _auth.authStateChanges();
   User? get currentUser => _auth.currentUser;
