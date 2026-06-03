@@ -70,16 +70,30 @@ class _SimTile extends ConsumerWidget {
       title: Text(sim.title ?? (isGbm ? 'Portfolio forecast' : 'Retirement plan')),
       subtitle: Text('$subtitle\n$date'),
       isThreeLine: true,
-      trailing: IconButton(
-        icon: const Icon(Icons.delete_outline),
-        onPressed: () {
-          final user = ref.read(authStateProvider).value;
-          if (user != null) {
-            ref
-                .read(firestoreServiceProvider)
-                .deleteSimulation(user.uid, sim.id);
-          }
-        },
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (sim.result.comparison != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Chip(
+                label: const Text('with GARCH'),
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () {
+              final user = ref.read(authStateProvider).value;
+              if (user != null) {
+                ref
+                    .read(firestoreServiceProvider)
+                    .deleteSimulation(user.uid, sim.id);
+              }
+            },
+          ),
+        ],
       ),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
