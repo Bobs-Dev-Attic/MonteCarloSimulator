@@ -32,6 +32,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
   double? _annualIncome;
   bool _saving = false;
   String? _error;
+  bool _defaultRelationApplied = false;
 
   bool get _isEdit => widget.existing != null;
 
@@ -40,12 +41,25 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
     super.initState();
     final e = widget.existing;
     _nameController = TextEditingController(text: e?.name ?? '');
-    _relation = e?.relation ?? MemberRelation.primary;
+    _relation = e?.relation ?? MemberRelation.primary; // tentative; refined in didChangeDependencies
     _dob = e?.dateOfBirth;
     _currentAge = e?.currentAge?.toDouble();
     _retirementAge = e?.retirementAge?.toDouble();
     _lifeExpectancy = e?.lifeExpectancy?.toDouble();
     _annualIncome = e?.annualIncome;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_defaultRelationApplied && widget.existing == null) {
+      _defaultRelationApplied = true;
+      final members = ref.read(membersProvider(widget.householdId)).value;
+      if (members != null && members.isNotEmpty) {
+        // mutate without setState — happens before first paint
+        _relation = MemberRelation.child;
+      }
+    }
   }
 
   @override
@@ -62,7 +76,7 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
       lastDate: now,
       initialDate: _dob ?? DateTime(now.year - 30, now.month, now.day),
     );
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() => _dob = picked);
     }
   }
@@ -131,6 +145,10 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
       ),
     );
     if (confirmed != true) return;
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
       await ref.read(memberServiceProvider).deleteMember(
             householdId: widget.householdId,
@@ -138,7 +156,9 @@ class _MemberFormScreenState extends ConsumerState<MemberFormScreen> {
           );
       if (mounted) Navigator.pop(context);
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
