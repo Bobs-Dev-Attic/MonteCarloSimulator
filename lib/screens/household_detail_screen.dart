@@ -341,6 +341,17 @@ class _PortfolioHeader extends StatelessWidget {
                         style: TextStyle(color: scheme.error, fontSize: 12),
                       ),
                     ),
+                  if (quotes.stale)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Prices may be delayed (cached)',
+                        style: TextStyle(
+                          color: scheme.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

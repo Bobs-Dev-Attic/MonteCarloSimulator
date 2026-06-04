@@ -103,13 +103,19 @@ pytest (server tests); flutter_test (client tests).
   line; home-screen tile shows a small "from tickers" chip.
 - [ ] **Step 3:** Tests for back-compatible parse; `flutter analyze`; commit.
 
-## Task 7: Server-side caching (gated behind live fetch)  ⬜ TODO
+## Task 7: Server-side caching  ✅ DONE (verified)
 
-**Files:** `functions/main.py`, `functions/montecarlo/cache.py` (new), tests
+**Files:** `functions/montecarlo/cache.py`, `functions/tests/test_cache.py`, `functions/main.py`
 
-- [ ] Cache `(sorted tickers, period, interval)` → estimate in
-  `marketDataCache/{hash}` with a TTL; serve stale-on-failure with a flag.
-  Only worth doing once live yfinance fetch is confirmed in the deployed env.
+- [x] `cache.py`: `make_key` (stable hash), `InMemoryStore`/`FirestoreStore`,
+  and `cached_fetch` (fresh-hit / expired-refetch / **stale-on-failure** /
+  propagate non-`MarketDataError`). 8 tests, all passing.
+- [x] Wired into both callables: `estimatePortfolio` caches per
+  `(tickers, weights, period, interval)` for 12h; `fetchQuotes` per sorted
+  tickers for 15m. Store is a lazily-built `marketDataCache` Firestore
+  collection (deferred so imports/tests don't need Firestore).
+- [x] Client surfaces the `stale` flag (`QuotesResult.stale` →
+  "Prices may be delayed (cached)" note).
 
 ---
 

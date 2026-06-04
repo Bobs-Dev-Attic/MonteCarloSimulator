@@ -11,7 +11,7 @@ from __future__ import annotations
 import firebase_admin
 from firebase_functions import https_fn, options
 
-from montecarlo import aggregate, estimate, marketdata
+from montecarlo import aggregate, cache, estimate, marketdata
 from montecarlo.gbm import simulate_gbm
 from montecarlo.garch import simulate_gbm_garch
 from montecarlo.retirement import simulate_retirement, success_rate
@@ -24,6 +24,30 @@ DEFAULT_SIMS = 10_000
 
 GARCH_ALPHA = 0.10
 GARCH_BETA = 0.85
+
+# Market-data cache: quotes go stale fast (intraday), estimates are stable for
+# hours (they summarize years of history).
+QUOTE_CACHE_TTL = 15 * 60          # 15 minutes
+ESTIMATE_CACHE_TTL = 12 * 60 * 60  # 12 hours
+_CACHE_COLLECTION = "marketDataCache"
+_cache_store = None
+
+
+def _store():
+    """Lazily build the Firestore-backed cache store.
+
+    Deferred to first use (not import time) so the module imports without a
+    Firestore client / credentials, and so unit tests that exercise the pure
+    runners never touch Firestore.
+    """
+    global _cache_store
+    if _cache_store is None:
+        from firebase_admin import firestore
+
+        _cache_store = cache.FirestoreStore(
+            firestore.client().collection(_CACHE_COLLECTION)
+        )
+    return _cache_store
 
 
 def _run_gbm(
@@ -137,8 +161,14 @@ def fetchQuotes(req: https_fn.CallableRequest) -> dict:
             https_fn.FunctionsErrorCode.UNAUTHENTICATED,
             "You must be signed in to fetch quotes.",
         )
+    data = req.data or {}
+    raw = data.get("tickers") or []
+    norm = sorted({str(t).strip().upper() for t in raw if str(t).strip()})
+    key = cache.make_key("quotes", tickers=norm)
     try:
-        return _fetch_quotes(req.data or {})
+        return cache.cached_fetch(
+            _store(), key, QUOTE_CACHE_TTL, lambda: _fetch_quotes(data)
+        )
     except ValueError as exc:
         raise https_fn.HttpsError(
             https_fn.FunctionsErrorCode.INVALID_ARGUMENT, str(exc)
@@ -204,8 +234,19 @@ def estimatePortfolio(req: https_fn.CallableRequest) -> dict:
         )
 
     inputs = req.data or {}
+    raw = inputs.get("tickers") or []
+    norm = [str(t).strip().upper() for t in raw if str(t).strip()]
+    key = cache.make_key(
+        "estimate",
+        tickers=norm,
+        weights=inputs.get("weights"),
+        period=str(inputs.get("period", "5y")),
+        interval=str(inputs.get("interval", "1d")),
+    )
     try:
-        return _estimate_portfolio(inputs)
+        return cache.cached_fetch(
+            _store(), key, ESTIMATE_CACHE_TTL, lambda: _estimate_portfolio(inputs)
+        )
     except ValueError as exc:
         raise https_fn.HttpsError(
             https_fn.FunctionsErrorCode.INVALID_ARGUMENT, str(exc)

@@ -14,12 +14,18 @@ class Quote {
 }
 
 /// Result of a quote request: resolved [quotes] keyed by upper-case ticker,
-/// plus any [missing] symbols Yahoo had no price for.
+/// any [missing] symbols Yahoo had no price for, and whether these prices were
+/// served [stale] from cache after a live fetch failed.
 class QuotesResult {
-  const QuotesResult({required this.quotes, required this.missing});
+  const QuotesResult({
+    required this.quotes,
+    required this.missing,
+    this.stale = false,
+  });
 
   final Map<String, Quote> quotes;
   final List<String> missing;
+  final bool stale;
 
   static const empty = QuotesResult(quotes: {}, missing: []);
 }
@@ -53,7 +59,11 @@ class QuoteService {
     final missing = ((data['missing'] as List?) ?? const [])
         .map((e) => e.toString())
         .toList();
-    return QuotesResult(quotes: quotes, missing: missing);
+    return QuotesResult(
+      quotes: quotes,
+      missing: missing,
+      stale: data['stale'] == true,
+    );
   }
 
   static dynamic _deepCast(dynamic value) {
