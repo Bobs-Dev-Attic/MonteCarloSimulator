@@ -2,22 +2,31 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../services/firestore_service.dart';
+import '../models/household.dart';
 import '../state/providers.dart';
-import 'results_screen.dart';
+import 'create_household_screen.dart';
+import 'household_detail_screen.dart';
 import 'simulation_form_screen.dart';
 
-/// Landing screen: lists the user's saved simulations and launches new ones.
+/// Landing screen: lists the signed-in advisor's households and opens
+/// the simulator form via an AppBar action.
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final sims = ref.watch(savedSimulationsProvider);
+    final households = ref.watch(householdsProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Simulations'),
+        title: const Text('Households'),
         actions: [
+          IconButton(
+            tooltip: 'Run a simulation',
+            icon: const Icon(Icons.science_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SimulationFormScreen()),
+            ),
+          ),
           IconButton(
             tooltip: 'Sign out',
             icon: const Icon(Icons.logout),
@@ -27,23 +36,21 @@ class HomeScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const SimulationFormScreen()),
+          MaterialPageRoute(builder: (_) => const CreateHouseholdScreen()),
         ),
         icon: const Icon(Icons.add),
-        label: const Text('New simulation'),
+        label: const Text('New household'),
       ),
-      body: sims.when(
+      body: households.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (items) {
-          if (items.isEmpty) {
-            return const _EmptyState();
-          }
+          if (items.isEmpty) return const _EmptyState();
           return ListView.separated(
             padding: const EdgeInsets.all(8),
             itemCount: items.length,
             separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, i) => _SimTile(sim: items[i]),
+            itemBuilder: (context, i) => _HouseholdTile(household: items[i]),
           );
         },
       ),
@@ -51,64 +58,54 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _SimTile extends ConsumerWidget {
-  const _SimTile({required this.sim});
-  final SavedSimulation sim;
+class _HouseholdTile extends ConsumerWidget {
+  const _HouseholdTile({required this.household});
+  final Household household;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isGbm = sim.config.model == 'gbm';
-    final date = DateFormat.yMMMd().add_jm().format(sim.createdAt);
-    final summary = sim.result.summary;
-    final subtitle = isGbm
-        ? 'Median ${_money(summary.median)} · P(loss) ${(summary.probLoss * 100).toStringAsFixed(1)}%'
-        : 'Success ${(summary.successRate * 100).toStringAsFixed(1)}%';
+    final created = DateFormat.yMMMd().format(household.createdAt);
     return ListTile(
-      leading: CircleAvatar(
-        child: Icon(isGbm ? Icons.trending_up : Icons.savings),
-      ),
-      title: Text(sim.title ?? (isGbm ? 'Portfolio forecast' : 'Retirement plan')),
-      subtitle: Text('$subtitle\n$date'),
-      isThreeLine: true,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (sim.result.comparison != null)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Chip(
-                label: const Text('with GARCH'),
-                visualDensity: VisualDensity.compact,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () {
-              final user = ref.read(authStateProvider).value;
-              if (user != null) {
-                ref
-                    .read(firestoreServiceProvider)
-                    .deleteSimulation(user.uid, sim.id);
-              }
-            },
-          ),
-        ],
+      leading: const CircleAvatar(child: Icon(Icons.home_outlined)),
+      title: Text(household.name),
+      subtitle: Text('created $created'),
+      trailing: IconButton(
+        tooltip: 'Delete household',
+        icon: const Icon(Icons.delete_outline),
+        onPressed: () => _confirmDelete(context, ref),
       ),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => ResultsScreen(
-            result: sim.result,
-            config: sim.config,
-            title: sim.title,
-          ),
+          builder: (_) => HouseholdDetailScreen(household: household),
         ),
       ),
     );
   }
 
-  String _money(double v) =>
-      NumberFormat.compactCurrency(symbol: '\$', decimalDigits: 0).format(v);
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete "${household.name}"?'),
+        content: const Text(
+          'This removes the household record. Members and portfolios will be removed in a later release.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ref.read(householdServiceProvider).deleteHousehold(household.id);
+    }
+  }
 }
 
 class _EmptyState extends StatelessWidget {
@@ -116,17 +113,26 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.insights, size: 72, color: Colors.grey),
-          const SizedBox(height: 12),
-          Text('No simulations yet',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
-          const Text('Tap "New simulation" to run your first forecast.'),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.home_outlined, size: 64, color: scheme.primary),
+            const SizedBox(height: 12),
+            const Text(
+              'No households yet',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Tap the + button to add your first household.',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
     );
   }

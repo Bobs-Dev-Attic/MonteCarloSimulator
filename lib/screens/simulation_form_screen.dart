@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/simulation_config.dart';
 import '../state/providers.dart';
+import '../widgets/scrub_field.dart';
 import 'results_screen.dart';
 
 /// Form for configuring and launching a GBM or retirement simulation.
@@ -15,72 +16,55 @@ class SimulationFormScreen extends ConsumerStatefulWidget {
 }
 
 class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
-  final _formKey = GlobalKey<FormState>();
   String _model = 'gbm';
   bool _busy = false;
   bool _compareGarch = false;
   String? _error;
 
   // GBM fields.
-  final _beginningValue = TextEditingController(text: '10000');
-  final _mu = TextEditingController(text: '7');
-  final _sigma = TextEditingController(text: '15');
-  final _years = TextEditingController(text: '10');
+  double _beginningValue = 10000;
+  double _mu = 7;
+  double _sigma = 15;
+  double _years = 10;
 
   // Retirement fields.
-  final _startingBalance = TextEditingController(text: '100000');
-  final _annualContribution = TextEditingController(text: '15000');
-  final _yearsToRetire = TextEditingController(text: '25');
-  final _retirementYears = TextEditingController(text: '30');
-  final _annualWithdrawal = TextEditingController(text: '60000');
-  final _meanReturn = TextEditingController(text: '6');
-  final _stdReturn = TextEditingController(text: '12');
-  final _inflation = TextEditingController(text: '2.5');
+  double _startingBalance = 100000;
+  double _annualContribution = 15000;
+  double _yearsToRetire = 25;
+  double _retirementYears = 30;
+  double _annualWithdrawal = 60000;
+  double _meanReturn = 6;
+  double _stdReturn = 12;
+  double _inflation = 2.5;
 
-  final _nSims = TextEditingController(text: '10000');
-
-  @override
-  void dispose() {
-    for (final c in [
-      _beginningValue, _mu, _sigma, _years, _startingBalance,
-      _annualContribution, _yearsToRetire, _retirementYears, _annualWithdrawal,
-      _meanReturn, _stdReturn, _inflation, _nSims,
-    ]) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
-  double _d(TextEditingController c) => double.tryParse(c.text.trim()) ?? 0;
-  int _i(TextEditingController c) => int.tryParse(c.text.trim()) ?? 0;
+  double _nSims = 10000;
 
   SimulationConfig _buildConfig() {
-    final nSims = _i(_nSims);
+    final nSims = _nSims.round();
     if (_model == 'gbm') {
       return SimulationConfig.gbm(
-        beginningValue: _d(_beginningValue),
-        mu: _d(_mu) / 100, // percent -> fraction
-        sigma: _d(_sigma) / 100,
-        years: _d(_years),
+        beginningValue: _beginningValue,
+        mu: _mu / 100,
+        sigma: _sigma / 100,
+        years: _years,
         nSims: nSims,
         compareGarch: _compareGarch,
       );
     }
     return SimulationConfig.retirement(
-      startingBalance: _d(_startingBalance),
-      annualContribution: _d(_annualContribution),
-      yearsToRetire: _i(_yearsToRetire),
-      retirementYears: _i(_retirementYears),
-      annualWithdrawal: _d(_annualWithdrawal),
-      meanReturn: _d(_meanReturn) / 100,
-      stdReturn: _d(_stdReturn) / 100,
-      inflation: _d(_inflation) / 100,
+      startingBalance: _startingBalance,
+      annualContribution: _annualContribution,
+      yearsToRetire: _yearsToRetire.round(),
+      retirementYears: _retirementYears.round(),
+      annualWithdrawal: _annualWithdrawal,
+      meanReturn: _meanReturn / 100,
+      stdReturn: _stdReturn / 100,
+      inflation: _inflation / 100,
       nSims: nSims,
     );
   }
 
   Future<void> _runSimulation() async {
-    if (!_formKey.currentState!.validate()) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -104,20 +88,26 @@ class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
         ),
       );
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  int _columnsFor(double width) {
+    if (width >= 720) return 4;
+    if (width >= 420) return 2;
+    return 1;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('New Simulation')),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SegmentedButton<String>(
               segments: const [
@@ -128,21 +118,51 @@ class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
               onSelectionChanged: (s) => setState(() => _model = s.first),
             ),
             const SizedBox(height: 16),
-            if (_model == 'gbm') ..._gbmFields() else ..._retirementFields(),
-            const Divider(height: 32),
-            _numField(_nSims, 'Number of simulations', isInt: true),
+            LayoutBuilder(builder: (context, c) {
+              final cols = _columnsFor(c.maxWidth);
+              const gutter = 12.0;
+              final fieldWidth = (c.maxWidth - gutter * (cols - 1)) / cols;
+              final fields = _model == 'gbm' ? _gbmFields() : _retirementFields();
+              return Wrap(
+                spacing: gutter,
+                runSpacing: gutter,
+                children: [
+                  for (final f in fields) SizedBox(width: fieldWidth, child: f),
+                ],
+              );
+            }),
+            const SizedBox(height: 16),
+            if (_model == 'gbm')
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                value: _compareGarch,
+                onChanged: (v) => setState(() => _compareGarch = v),
+                title: const Text('Compare with GARCH(1,1)'),
+                subtitle: const Text(
+                    'Adds a second simulation with time-varying volatility, same average σ.'),
+              ),
+            const SizedBox(height: 8),
+            ScrubField(
+              label: 'Number of simulations',
+              value: _nSims,
+              kind: ScrubKind.integer,
+              minValue: 1000,
+              maxValue: 50000,
+              onChanged: (v) => setState(() => _nSims = v),
+            ),
             if (_error != null) ...[
               const SizedBox(height: 12),
               Text(_error!, style: const TextStyle(color: Colors.red)),
             ],
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _busy ? null : _runSimulation,
               icon: _busy
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : const Icon(Icons.play_arrow),
               label: Text(_busy ? 'Running…' : 'Run simulation'),
             ),
@@ -153,48 +173,105 @@ class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
   }
 
   List<Widget> _gbmFields() => [
-        _numField(_beginningValue, 'Beginning value (\$)'),
-        _numField(_mu, 'Expected annual return (%)'),
-        _numField(_sigma, 'Volatility / std dev (%)'),
-        _numField(_years, 'Time horizon (years)'),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            value: _compareGarch,
-            onChanged: (v) => setState(() => _compareGarch = v),
-            title: const Text('Compare with GARCH(1,1)'),
-            subtitle: const Text(
-              'Adds a second simulation with time-varying volatility, same average σ.',
-            ),
-          ),
+        ScrubField(
+          label: 'Beginning value',
+          value: _beginningValue,
+          kind: ScrubKind.money,
+          suffixText: '\$',
+          minValue: 1,
+          onChanged: (v) => setState(() => _beginningValue = v),
+        ),
+        ScrubField(
+          label: 'Expected return',
+          value: _mu,
+          kind: ScrubKind.percent,
+          suffixText: '%',
+          onChanged: (v) => setState(() => _mu = v),
+        ),
+        ScrubField(
+          label: 'Volatility',
+          value: _sigma,
+          kind: ScrubKind.percent,
+          suffixText: '%',
+          minValue: 0,
+          onChanged: (v) => setState(() => _sigma = v),
+        ),
+        ScrubField(
+          label: 'Time horizon',
+          value: _years,
+          kind: ScrubKind.years,
+          suffixText: 'years',
+          minValue: 1,
+          maxValue: 50,
+          onChanged: (v) => setState(() => _years = v),
         ),
       ];
 
   List<Widget> _retirementFields() => [
-        _numField(_startingBalance, 'Starting balance (\$)'),
-        _numField(_annualContribution, 'Annual contribution (\$)'),
-        _numField(_yearsToRetire, 'Years until retirement', isInt: true),
-        _numField(_retirementYears, 'Years in retirement', isInt: true),
-        _numField(_annualWithdrawal, 'Annual withdrawal (\$)'),
-        _numField(_meanReturn, 'Mean annual return (%)'),
-        _numField(_stdReturn, 'Return volatility (%)'),
-        _numField(_inflation, 'Inflation (%)'),
+        ScrubField(
+          label: 'Starting balance',
+          value: _startingBalance,
+          kind: ScrubKind.money,
+          suffixText: '\$',
+          minValue: 0,
+          onChanged: (v) => setState(() => _startingBalance = v),
+        ),
+        ScrubField(
+          label: 'Annual contribution',
+          value: _annualContribution,
+          kind: ScrubKind.money,
+          suffixText: '\$',
+          minValue: 0,
+          onChanged: (v) => setState(() => _annualContribution = v),
+        ),
+        ScrubField(
+          label: 'Years until retirement',
+          value: _yearsToRetire,
+          kind: ScrubKind.years,
+          suffixText: 'years',
+          minValue: 0,
+          maxValue: 50,
+          onChanged: (v) => setState(() => _yearsToRetire = v),
+        ),
+        ScrubField(
+          label: 'Years in retirement',
+          value: _retirementYears,
+          kind: ScrubKind.years,
+          suffixText: 'years',
+          minValue: 1,
+          maxValue: 50,
+          onChanged: (v) => setState(() => _retirementYears = v),
+        ),
+        ScrubField(
+          label: 'Annual withdrawal',
+          value: _annualWithdrawal,
+          kind: ScrubKind.money,
+          suffixText: '\$',
+          minValue: 0,
+          onChanged: (v) => setState(() => _annualWithdrawal = v),
+        ),
+        ScrubField(
+          label: 'Mean return',
+          value: _meanReturn,
+          kind: ScrubKind.percent,
+          suffixText: '%',
+          onChanged: (v) => setState(() => _meanReturn = v),
+        ),
+        ScrubField(
+          label: 'Return volatility',
+          value: _stdReturn,
+          kind: ScrubKind.percent,
+          suffixText: '%',
+          minValue: 0,
+          onChanged: (v) => setState(() => _stdReturn = v),
+        ),
+        ScrubField(
+          label: 'Inflation',
+          value: _inflation,
+          kind: ScrubKind.percent,
+          suffixText: '%',
+          minValue: 0,
+          onChanged: (v) => setState(() => _inflation = v),
+        ),
       ];
-
-  Widget _numField(TextEditingController c, String label, {bool isInt = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: TextFormField(
-        controller: c,
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-        keyboardType: TextInputType.numberWithOptions(decimal: !isInt),
-        validator: (v) {
-          final parsed = isInt ? int.tryParse(v ?? '') : double.tryParse(v ?? '');
-          if (parsed == null) return 'Enter a valid number';
-          return null;
-        },
-      ),
-    );
-  }
 }

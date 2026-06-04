@@ -8,12 +8,15 @@ returned (and then persisted to Firestore by the client).
 
 from __future__ import annotations
 
+import firebase_admin
 from firebase_functions import https_fn, options
 
 from montecarlo import aggregate
 from montecarlo.gbm import simulate_gbm
 from montecarlo.garch import simulate_gbm_garch
 from montecarlo.retirement import simulate_retirement, success_rate
+
+firebase_admin.initialize_app()
 
 # Bound compute/cost: never run more than this many paths per request.
 MAX_SIMS = 50_000
