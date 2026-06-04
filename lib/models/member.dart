@@ -77,7 +77,7 @@ class Member {
       final hadBirthdayThisYear = (now.month > dob.month) ||
           (now.month == dob.month && now.day >= dob.day);
       if (!hadBirthdayThisYear) age -= 1;
-      return age;
+      return age < 0 ? null : age;
     }
     return currentAge;
   }

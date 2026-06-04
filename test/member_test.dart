@@ -122,8 +122,13 @@ void main() {
         );
 
     test('returns DOB-derived age when DOB present', () {
-      final m = make(dob: DateTime.utc(1978, 4, 12));
-      expect(m.effectiveAge, anyOf(47, 48));
+      final dob = DateTime.utc(1978, 4, 12);
+      final today = DateTime.now();
+      final hadBirthday = today.month > dob.month ||
+          (today.month == dob.month && today.day >= dob.day);
+      final expected = today.year - dob.year - (hadBirthday ? 0 : 1);
+      final m = make(dob: dob);
+      expect(m.effectiveAge, expected);
     });
 
     test('falls back to currentAge when DOB null', () {
@@ -132,6 +137,11 @@ void main() {
 
     test('returns null when both null', () {
       expect(make().effectiveAge, isNull);
+    });
+
+    test('returns null for future date of birth', () {
+      final future = DateTime.now().add(const Duration(days: 365 * 5));
+      expect(make(dob: future).effectiveAge, isNull);
     });
   });
 }
