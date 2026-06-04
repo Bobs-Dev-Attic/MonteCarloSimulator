@@ -11,7 +11,7 @@ from __future__ import annotations
 import firebase_admin
 from firebase_functions import https_fn, options
 
-from montecarlo import aggregate
+from montecarlo import aggregate, estimate, marketdata
 from montecarlo.gbm import simulate_gbm
 from montecarlo.garch import simulate_gbm_garch
 from montecarlo.retirement import simulate_retirement, success_rate
@@ -95,6 +95,78 @@ def _run_retirement(inputs: dict, n_sims: int, seed: int | None) -> dict:
 
 
 _MODELS = {"gbm": _run_gbm, "retirement": _run_retirement}
+
+# Bound the history window an advisor can request so a single call stays cheap.
+ALLOWED_PERIODS = {"1y", "2y", "5y", "10y", "max"}
+ALLOWED_INTERVALS = {"1d", "1wk", "1mo"}
+MAX_TICKERS = 25
+
+
+def _estimate_portfolio(inputs: dict) -> dict:
+    """Derive GBM ``mu``/``sigma`` from a basket of tickers' price history.
+
+    Fetches historical closes via :mod:`montecarlo.marketdata`, then collapses
+    the basket into a single drift/volatility pair (plus per-asset stats and the
+    correlation matrix) via :mod:`montecarlo.estimate`. The returned ``mu`` and
+    ``sigma`` are ready to drop straight into a ``gbm`` simulation request.
+    """
+    tickers = inputs.get("tickers") or []
+    if not isinstance(tickers, list) or not tickers:
+        raise ValueError("provide a non-empty 'tickers' list")
+    if len(tickers) > MAX_TICKERS:
+        raise ValueError(f"at most {MAX_TICKERS} tickers per request")
+
+    weights = inputs.get("weights")
+    period = str(inputs.get("period", "5y"))
+    interval = str(inputs.get("interval", "1d"))
+    if period not in ALLOWED_PERIODS:
+        raise ValueError(f"period must be one of {sorted(ALLOWED_PERIODS)}")
+    if interval not in ALLOWED_INTERVALS:
+        raise ValueError(f"interval must be one of {sorted(ALLOWED_INTERVALS)}")
+
+    history = marketdata.fetch_price_history(
+        [str(t) for t in tickers], period=period, interval=interval
+    )
+    stats = estimate.portfolio_gbm_inputs(history.prices, weights=weights)
+    stats["tickers"] = history.tickers
+    stats["period"] = period
+    stats["interval"] = interval
+    stats["start_date"] = history.dates[0]
+    stats["end_date"] = history.dates[-1]
+    return stats
+
+
+@https_fn.on_call(
+    memory=options.MemoryOption.MB_512,
+    timeout_sec=60,
+)
+def estimatePortfolio(req: https_fn.CallableRequest) -> dict:
+    """Estimate GBM inputs for a portfolio of tickers from historical prices.
+
+    Request data: ``{ "tickers": [str], "weights": [float]?, "period": str?,
+    "interval": str? }``. Returns ``mu``/``sigma`` plus per-asset stats, the
+    correlation matrix, and the resolved date range. Market data comes from
+    Yahoo Finance via yfinance; failures surface as ``UNAVAILABLE`` so the
+    client can fall back to manual ``mu``/``sigma`` entry.
+    """
+    if req.auth is None:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.UNAUTHENTICATED,
+            "You must be signed in to estimate a portfolio.",
+        )
+
+    inputs = req.data or {}
+    try:
+        return _estimate_portfolio(inputs)
+    except ValueError as exc:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.INVALID_ARGUMENT, str(exc)
+        )
+    except marketdata.MarketDataError as exc:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.UNAVAILABLE,
+            f"Could not fetch market data: {exc}",
+        )
 
 
 @https_fn.on_call(

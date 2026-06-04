@@ -6,7 +6,11 @@ firebase_functions callable.
 
 from __future__ import annotations
 
+import numpy as np
+import pytest
+
 import main
+from montecarlo import marketdata
 
 
 _BASE_INPUTS = {
@@ -55,3 +59,50 @@ def test_retirement_ignores_compare_garch():
     # signature stays clean.
     result = main._run_retirement(inputs, n_sims=200, seed=1)
     assert "comparison" not in result
+
+
+# ----------------------- Portfolio estimation --------------------------------
+
+def _fake_history(tickers, *, period="5y", interval="1d"):
+    """Deterministic two-asset price history (no network)."""
+    rng = np.random.default_rng(0)
+    n = 600
+    cols = [np.cumprod(1 + rng.normal(0.0004, 0.01, n)) * 100 for _ in tickers]
+    prices = np.column_stack(cols)
+    dates = [f"2020-01-{(i % 28) + 1:02d}" for i in range(n)]
+    return marketdata.PriceHistory(
+        tickers=[t.upper() for t in tickers], prices=prices, dates=dates
+    )
+
+
+def test_estimate_portfolio_returns_gbm_inputs(monkeypatch):
+    monkeypatch.setattr(marketdata, "fetch_price_history", _fake_history)
+    result = main._estimate_portfolio({"tickers": ["aapl", "msft"]})
+    assert set(result.keys()) >= {
+        "mu", "sigma", "weights", "assets", "correlation",
+        "tickers", "start_date", "end_date",
+    }
+    assert result["tickers"] == ["AAPL", "MSFT"]
+    assert result["sigma"] > 0
+    assert len(result["assets"]) == 2
+    assert result["weights"] == pytest.approx([0.5, 0.5])
+
+
+def test_estimate_portfolio_rejects_empty_tickers(monkeypatch):
+    monkeypatch.setattr(marketdata, "fetch_price_history", _fake_history)
+    with pytest.raises(ValueError):
+        main._estimate_portfolio({"tickers": []})
+
+
+def test_estimate_portfolio_validates_period(monkeypatch):
+    monkeypatch.setattr(marketdata, "fetch_price_history", _fake_history)
+    with pytest.raises(ValueError):
+        main._estimate_portfolio({"tickers": ["AAPL"], "period": "3d"})
+
+
+def test_estimate_portfolio_propagates_weights(monkeypatch):
+    monkeypatch.setattr(marketdata, "fetch_price_history", _fake_history)
+    result = main._estimate_portfolio(
+        {"tickers": ["AAPL", "MSFT"], "weights": [3, 1]}
+    )
+    assert result["weights"] == pytest.approx([0.75, 0.25])

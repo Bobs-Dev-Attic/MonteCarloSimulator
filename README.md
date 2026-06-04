@@ -92,7 +92,26 @@ firebase deploy --only functions,firestore:rules
   analytic expectation, retirement success-rate bounds, aggregation ordering.
 - **Flutter**: `flutter test` — config payloads and result parsing.
 
+## Portfolio estimation from market data
+
+The GBM model's μ (drift) and σ (volatility) can be **derived from historical
+prices** instead of typed in by hand. The `estimatePortfolio` Cloud Function
+takes a basket of tickers (and optional weights), fetches adjusted closes via
+[yfinance](https://pypi.org/project/yfinance/), and returns annualized μ/σ plus
+per-asset stats and the correlation matrix — capturing the diversification
+benefit through the full covariance. Those μ/σ feed a normal `runSimulation`
+call, so estimation and simulation stay decoupled.
+
+- `functions/montecarlo/estimate.py` — pure NumPy: prices → GBM inputs.
+- `functions/montecarlo/marketdata.py` — the only networked module (yfinance,
+  lazily imported); failures surface as `UNAVAILABLE` so the client falls back
+  to manual μ/σ entry.
+
+yfinance is an unofficial Yahoo Finance client with no SLA, so it is isolated
+behind one module and meant to be paired with caching + manual fallback. See
+`docs/superpowers/specs/2026-06-04-portfolio-yfinance-design.md`.
+
 ## Out of scope (for now)
 
-Correlated multi-asset portfolios, fat-tailed/jump models, live market-data
-ingestion (μ/σ are user inputs), and CI/CD.
+Correlated multi-asset *path* simulation, fat-tailed/jump models, real-time
+quotes, and CI/CD.
