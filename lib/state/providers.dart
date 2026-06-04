@@ -2,9 +2,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/household.dart';
+import '../models/member.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/household_service.dart';
+import '../services/member_service.dart';
 import '../services/simulation_service.dart';
 
 /// Shared singletons.
@@ -44,3 +46,12 @@ final householdsProvider =
 final currentAdvisorUidProvider = Provider<String?>((ref) {
   return ref.watch(authStateProvider).value?.uid;
 });
+
+final memberServiceProvider =
+    Provider<MemberService>((ref) => MemberService());
+
+/// Live, sorted list of members under a household. Keyed by household id.
+final membersProvider = StreamProvider.autoDispose
+    .family<List<Member>, String>(
+  (ref, hid) => ref.watch(memberServiceProvider).watchMembers(hid),
+);
