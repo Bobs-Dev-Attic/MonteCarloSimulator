@@ -82,8 +82,13 @@ void main() {
     await col.doc('m1').set({'name': 'Zoe', 'relation': 'child'});
     await col.doc('m2').set({'name': 'Alice', 'relation': 'primary'});
     await col.doc('m3').set({'name': 'Bob', 'relation': 'spouse'});
+    await col.doc('m4').set({'name': 'Charlie', 'relation': 'child'});
+    await col.doc('m5').set({'name': 'anna', 'relation': 'child'}); // lowercase for case-insensitivity check
     final list = await svc.watchMembers('h1').first;
-    expect(list.map((m) => m.name).toList(), ['Alice', 'Bob', 'Zoe']);
+    expect(
+      list.map((m) => m.name).toList(),
+      ['Alice', 'Bob', 'anna', 'Charlie', 'Zoe'],
+    );
   });
 
   test('watchMembers scopes to the household', () async {
