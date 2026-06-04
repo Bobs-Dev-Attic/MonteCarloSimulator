@@ -1,5 +1,7 @@
 # MonteCarloSimulator
 
+[![CI](https://github.com/Bobs-Dev-Attic/MonteCarloSimulator/actions/workflows/ci.yml/badge.svg)](https://github.com/Bobs-Dev-Attic/MonteCarloSimulator/actions/workflows/ci.yml)
+
 A cross-platform **Flutter** app, backed by **Firebase**, that runs **Monte Carlo
 simulations** for financial analysis. Instead of relying on a single static average
 return, it runs thousands of randomized scenarios to map the full *spectrum* of
@@ -130,5 +132,6 @@ into the GBM simulator (which derives μ/σ via `estimatePortfolio`).
 
 ## Out of scope (for now)
 
-Correlated multi-asset *path* simulation, fat-tailed/jump models, real-time
-quotes, and CI/CD.
+Correlated multi-asset *path* simulation, fat-tailed/jump models, and real-time
+quotes. (CI runs `pytest` + `flutter test` on every PR — see
+`.github/workflows/ci.yml`.)
