@@ -92,7 +92,43 @@ firebase deploy --only functions,firestore:rules
   analytic expectation, retirement success-rate bounds, aggregation ordering.
 - **Flutter**: `flutter test` — config payloads and result parsing.
 
+## Portfolio estimation from market data
+
+The GBM model's μ (drift) and σ (volatility) can be **derived from historical
+prices** instead of typed in by hand. The `estimatePortfolio` Cloud Function
+takes a basket of tickers (and optional weights), fetches adjusted closes via
+[yfinance](https://pypi.org/project/yfinance/), and returns annualized μ/σ plus
+per-asset stats and the correlation matrix — capturing the diversification
+benefit through the full covariance. Those μ/σ feed a normal `runSimulation`
+call, so estimation and simulation stay decoupled.
+
+- `functions/montecarlo/estimate.py` — pure NumPy: prices → GBM inputs.
+- `functions/montecarlo/marketdata.py` — the only networked module (yfinance,
+  lazily imported); failures surface as `UNAVAILABLE` so the client falls back
+  to manual μ/σ entry.
+
+yfinance is an unofficial Yahoo Finance client with no SLA, so it is isolated
+behind one module and meant to be paired with caching + manual fallback. See
+`docs/superpowers/specs/2026-06-04-portfolio-yfinance-design.md`.
+
+## Investments database (per customer)
+
+Each household (customer) has a live **investments database** under
+`households/{id}/investments/{id}` — minimal records of `ticker` + `quantity`.
+Holdings are priced live via the `fetchQuotes` Cloud Function (yfinance), so the
+Investments tab shows current market value, a running portfolio total, and a
+**Simulate** button that feeds the basket's tickers and value-weights straight
+into the GBM simulator (which derives μ/σ via `estimatePortfolio`).
+
+- `lib/models/investment.dart`, `lib/services/investment_service.dart` — CRUD +
+  live stream, mirroring the household/member pattern.
+- `lib/services/quote_service.dart` — live prices; `portfolio_service.dart` —
+  the simulate bridge.
+- `functions` `fetchQuotes` callable — latest close per ticker, resolved
+  independently so one bad symbol doesn't blank the basket.
+- See `docs/superpowers/specs/2026-06-04-investments-database-design.md`.
+
 ## Out of scope (for now)
 
-Correlated multi-asset portfolios, fat-tailed/jump models, live market-data
-ingestion (μ/σ are user inputs), and CI/CD.
+Correlated multi-asset *path* simulation, fat-tailed/jump models, real-time
+quotes, and CI/CD.

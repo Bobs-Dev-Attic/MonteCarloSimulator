@@ -7,8 +7,19 @@ import '../widgets/scrub_field.dart';
 import 'results_screen.dart';
 
 /// Form for configuring and launching a GBM or retirement simulation.
+///
+/// When [initialTickers] are supplied (e.g. from a customer's investments
+/// database), the form opens on the GBM tab and derives the expected return and
+/// volatility from those tickers' price history via `estimatePortfolio`.
 class SimulationFormScreen extends ConsumerStatefulWidget {
-  const SimulationFormScreen({super.key});
+  const SimulationFormScreen({
+    super.key,
+    this.initialTickers,
+    this.initialWeights,
+  });
+
+  final List<String>? initialTickers;
+  final List<double>? initialWeights;
 
   @override
   ConsumerState<SimulationFormScreen> createState() =>
@@ -20,6 +31,55 @@ class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
   bool _busy = false;
   bool _compareGarch = false;
   String? _error;
+
+  // Set when μ/σ were derived from a tickers basket (provenance banner).
+  bool _estimating = false;
+  String? _estimateLabel;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialTickers != null && widget.initialTickers!.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _estimateFromTickers();
+      });
+    }
+  }
+
+  Future<void> _estimateFromTickers() async {
+    final tickers = widget.initialTickers;
+    if (tickers == null || tickers.isEmpty) return;
+    setState(() {
+      _estimating = true;
+      _error = null;
+    });
+    try {
+      final est = await ref.read(portfolioServiceProvider).estimate(
+            tickers: tickers,
+            weights: widget.initialWeights,
+          );
+      if (!mounted) return;
+      setState(() {
+        _mu = est.mu * 100; // fraction -> percent for the form fields
+        _sigma = est.sigma * 100;
+        final window = est.startDate != null && est.endDate != null
+            ? ' · ${est.startDate}→${est.endDate}'
+            : '';
+        _estimateLabel = 'From history: ${est.tickers.join(', ')}$window';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _estimateLabel = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text("Couldn't fetch market data; enter expected return / volatility manually"),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _estimating = false);
+    }
+  }
 
   // GBM fields.
   double _beginningValue = 10000;
@@ -117,6 +177,13 @@ class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
               selected: {_model},
               onSelectionChanged: (s) => setState(() => _model = s.first),
             ),
+            if (_estimating || _estimateLabel != null) ...[
+              const SizedBox(height: 12),
+              _EstimateBanner(
+                estimating: _estimating,
+                label: _estimateLabel,
+              ),
+            ],
             const SizedBox(height: 16),
             LayoutBuilder(builder: (context, c) {
               final cols = _columnsFor(c.maxWidth);
@@ -274,4 +341,47 @@ class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
           onChanged: (v) => setState(() => _inflation = v),
         ),
       ];
+}
+
+/// Small banner shown when the GBM inputs were derived from a tickers basket,
+/// so the advisor can see the expected return / volatility are data-driven (and
+/// still edit them).
+class _EstimateBanner extends StatelessWidget {
+  const _EstimateBanner({required this.estimating, required this.label});
+
+  final bool estimating;
+  final String? label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          if (estimating)
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          else
+            Icon(Icons.insights, size: 18, color: scheme.onSecondaryContainer),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              estimating
+                  ? 'Estimating expected return & volatility from price history…'
+                  : (label ?? ''),
+              style: TextStyle(color: scheme.onSecondaryContainer),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

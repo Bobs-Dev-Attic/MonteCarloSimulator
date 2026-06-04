@@ -11,7 +11,7 @@ from __future__ import annotations
 import firebase_admin
 from firebase_functions import https_fn, options
 
-from montecarlo import aggregate
+from montecarlo import aggregate, cache, estimate, marketdata
 from montecarlo.gbm import simulate_gbm
 from montecarlo.garch import simulate_gbm_garch
 from montecarlo.retirement import simulate_retirement, success_rate
@@ -24,6 +24,30 @@ DEFAULT_SIMS = 10_000
 
 GARCH_ALPHA = 0.10
 GARCH_BETA = 0.85
+
+# Market-data cache: quotes go stale fast (intraday), estimates are stable for
+# hours (they summarize years of history).
+QUOTE_CACHE_TTL = 15 * 60          # 15 minutes
+ESTIMATE_CACHE_TTL = 12 * 60 * 60  # 12 hours
+_CACHE_COLLECTION = "marketDataCache"
+_cache_store = None
+
+
+def _store():
+    """Lazily build the Firestore-backed cache store.
+
+    Deferred to first use (not import time) so the module imports without a
+    Firestore client / credentials, and so unit tests that exercise the pure
+    runners never touch Firestore.
+    """
+    global _cache_store
+    if _cache_store is None:
+        from firebase_admin import firestore
+
+        _cache_store = cache.FirestoreStore(
+            firestore.client().collection(_CACHE_COLLECTION)
+        )
+    return _cache_store
 
 
 def _run_gbm(
@@ -95,6 +119,143 @@ def _run_retirement(inputs: dict, n_sims: int, seed: int | None) -> dict:
 
 
 _MODELS = {"gbm": _run_gbm, "retirement": _run_retirement}
+
+# Bound the history window an advisor can request so a single call stays cheap.
+ALLOWED_PERIODS = {"1y", "2y", "5y", "10y", "max"}
+ALLOWED_INTERVALS = {"1d", "1wk", "1mo"}
+MAX_TICKERS = 25
+# Quote requests can value a larger book of holdings in one round-trip.
+MAX_QUOTE_TICKERS = 100
+
+
+def _fetch_quotes(inputs: dict) -> dict:
+    """Latest closing price per ticker, for valuing a customer's holdings.
+
+    Thin wrapper over :func:`montecarlo.marketdata.fetch_quotes` that validates
+    the request shape. Symbols Yahoo has no price for are returned under
+    ``missing`` rather than failing the whole call.
+    """
+    tickers = inputs.get("tickers") or []
+    if not isinstance(tickers, list) or not tickers:
+        raise ValueError("provide a non-empty 'tickers' list")
+    if len(tickers) > MAX_QUOTE_TICKERS:
+        raise ValueError(f"at most {MAX_QUOTE_TICKERS} tickers per request")
+    return marketdata.fetch_quotes([str(t) for t in tickers])
+
+
+@https_fn.on_call(
+    memory=options.MemoryOption.MB_256,
+    timeout_sec=30,
+)
+def fetchQuotes(req: https_fn.CallableRequest) -> dict:
+    """Return the latest closing price for each requested ticker.
+
+    Request data: ``{ "tickers": [str] }``. Response:
+    ``{ "quotes": { TICKER: { "price": float, "as_of": str } },
+    "missing": [str] }``. Used by the client to value a customer's investments
+    database live. Market data comes from Yahoo Finance via yfinance; failures
+    surface as ``UNAVAILABLE``.
+    """
+    if req.auth is None:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.UNAUTHENTICATED,
+            "You must be signed in to fetch quotes.",
+        )
+    data = req.data or {}
+    raw = data.get("tickers") or []
+    norm = sorted({str(t).strip().upper() for t in raw if str(t).strip()})
+    key = cache.make_key("quotes", tickers=norm)
+    try:
+        return cache.cached_fetch(
+            _store(), key, QUOTE_CACHE_TTL, lambda: _fetch_quotes(data)
+        )
+    except ValueError as exc:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.INVALID_ARGUMENT, str(exc)
+        )
+    except marketdata.MarketDataError as exc:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.UNAVAILABLE,
+            f"Could not fetch quotes: {exc}",
+        )
+
+
+def _estimate_portfolio(inputs: dict) -> dict:
+    """Derive GBM ``mu``/``sigma`` from a basket of tickers' price history.
+
+    Fetches historical closes via :mod:`montecarlo.marketdata`, then collapses
+    the basket into a single drift/volatility pair (plus per-asset stats and the
+    correlation matrix) via :mod:`montecarlo.estimate`. The returned ``mu`` and
+    ``sigma`` are ready to drop straight into a ``gbm`` simulation request.
+    """
+    tickers = inputs.get("tickers") or []
+    if not isinstance(tickers, list) or not tickers:
+        raise ValueError("provide a non-empty 'tickers' list")
+    if len(tickers) > MAX_TICKERS:
+        raise ValueError(f"at most {MAX_TICKERS} tickers per request")
+
+    weights = inputs.get("weights")
+    period = str(inputs.get("period", "5y"))
+    interval = str(inputs.get("interval", "1d"))
+    if period not in ALLOWED_PERIODS:
+        raise ValueError(f"period must be one of {sorted(ALLOWED_PERIODS)}")
+    if interval not in ALLOWED_INTERVALS:
+        raise ValueError(f"interval must be one of {sorted(ALLOWED_INTERVALS)}")
+
+    history = marketdata.fetch_price_history(
+        [str(t) for t in tickers], period=period, interval=interval
+    )
+    stats = estimate.portfolio_gbm_inputs(history.prices, weights=weights)
+    stats["tickers"] = history.tickers
+    stats["period"] = period
+    stats["interval"] = interval
+    stats["start_date"] = history.dates[0]
+    stats["end_date"] = history.dates[-1]
+    return stats
+
+
+@https_fn.on_call(
+    memory=options.MemoryOption.MB_512,
+    timeout_sec=60,
+)
+def estimatePortfolio(req: https_fn.CallableRequest) -> dict:
+    """Estimate GBM inputs for a portfolio of tickers from historical prices.
+
+    Request data: ``{ "tickers": [str], "weights": [float]?, "period": str?,
+    "interval": str? }``. Returns ``mu``/``sigma`` plus per-asset stats, the
+    correlation matrix, and the resolved date range. Market data comes from
+    Yahoo Finance via yfinance; failures surface as ``UNAVAILABLE`` so the
+    client can fall back to manual ``mu``/``sigma`` entry.
+    """
+    if req.auth is None:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.UNAUTHENTICATED,
+            "You must be signed in to estimate a portfolio.",
+        )
+
+    inputs = req.data or {}
+    raw = inputs.get("tickers") or []
+    norm = [str(t).strip().upper() for t in raw if str(t).strip()]
+    key = cache.make_key(
+        "estimate",
+        tickers=norm,
+        weights=inputs.get("weights"),
+        period=str(inputs.get("period", "5y")),
+        interval=str(inputs.get("interval", "1d")),
+    )
+    try:
+        return cache.cached_fetch(
+            _store(), key, ESTIMATE_CACHE_TTL, lambda: _estimate_portfolio(inputs)
+        )
+    except ValueError as exc:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.INVALID_ARGUMENT, str(exc)
+        )
+    except marketdata.MarketDataError as exc:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.UNAVAILABLE,
+            f"Could not fetch market data: {exc}",
+        )
 
 
 @https_fn.on_call(

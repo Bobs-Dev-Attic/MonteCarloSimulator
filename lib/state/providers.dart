@@ -2,11 +2,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/household.dart';
+import '../models/investment.dart';
 import '../models/member.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/household_service.dart';
+import '../services/investment_service.dart';
 import '../services/member_service.dart';
+import '../services/portfolio_service.dart';
+import '../services/quote_service.dart';
 import '../services/simulation_service.dart';
 
 /// Shared singletons.
@@ -55,3 +59,27 @@ final membersProvider = StreamProvider.autoDispose
     .family<List<Member>, String>(
   (ref, hid) => ref.watch(memberServiceProvider).watchMembers(hid),
 );
+
+final investmentServiceProvider =
+    Provider<InvestmentService>((ref) => InvestmentService());
+
+/// Live, ticker-sorted list of a household's investments. Keyed by household id.
+final investmentsProvider = StreamProvider.autoDispose
+    .family<List<Investment>, String>(
+  (ref, hid) => ref.watch(investmentServiceProvider).watchInvestments(hid),
+);
+
+final quoteServiceProvider =
+    Provider<QuoteService>((ref) => QuoteService());
+
+/// Live quotes for a basket of tickers. The family key is a comma-joined,
+/// upper-cased, sorted ticker list so identical baskets share one request and
+/// the provider re-runs only when the set of tickers actually changes.
+final quotesProvider = FutureProvider.autoDispose
+    .family<QuotesResult, String>((ref, tickersCsv) {
+  if (tickersCsv.isEmpty) return Future.value(QuotesResult.empty);
+  return ref.watch(quoteServiceProvider).fetchQuotes(tickersCsv.split(','));
+});
+
+final portfolioServiceProvider =
+    Provider<PortfolioService>((ref) => PortfolioService());
