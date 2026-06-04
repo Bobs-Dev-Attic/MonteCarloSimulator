@@ -110,12 +110,31 @@ class _MemberTile extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed != true) return;
+    try {
       await ref.read(memberServiceProvider).deleteMember(
             householdId: household.id,
             memberId: member.id,
           );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
     }
+  }
+
+  void _openEdit(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MemberFormScreen(
+          householdId: household.id,
+          existing: member,
+        ),
+      ),
+    );
   }
 
   @override
@@ -128,29 +147,13 @@ class _MemberTile extends StatelessWidget {
         subtitle: Text(
           '${relationLabel(member.relation)} · age ${age ?? '—'}',
         ),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => MemberFormScreen(
-              householdId: household.id,
-              existing: member,
-            ),
-          ),
-        ),
+        onTap: () => _openEdit(context),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
               icon: const Icon(Icons.edit_outlined),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => MemberFormScreen(
-                    householdId: household.id,
-                    existing: member,
-                  ),
-                ),
-              ),
+              onPressed: () => _openEdit(context),
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline),

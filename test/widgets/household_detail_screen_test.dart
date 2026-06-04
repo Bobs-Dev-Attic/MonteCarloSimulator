@@ -108,4 +108,23 @@ void main() {
     verify(() => svc.deleteMember(householdId: 'h1', memberId: 'm1'))
         .called(1);
   });
+
+  testWidgets('delete error surfaces a SnackBar', (tester) async {
+    when(() => svc.deleteMember(
+          householdId: any(named: 'householdId'),
+          memberId: any(named: 'memberId'),
+        )).thenThrow(Exception('boom'));
+
+    await tester.pumpWidget(host(Stream.value([
+      _m('m1', 'John', MemberRelation.primary),
+    ])));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.delete_outline).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('boom'), findsOneWidget);
+  });
 }
