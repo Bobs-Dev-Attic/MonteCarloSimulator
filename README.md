@@ -128,6 +128,19 @@ into the GBM simulator (which derives μ/σ via `estimatePortfolio`).
   independently so one bad symbol doesn't blank the basket.
 - See `docs/superpowers/specs/2026-06-04-investments-database-design.md`.
 
+## Saved portfolios (model baskets)
+
+The **Portfolios** tab on a household holds named, reusable baskets of tickers +
+target weights (e.g. "60/40 Growth" = `VTI` 60 / `BND` 40) under
+`households/{id}/portfolios/{id}`. Each has a one-tap **Simulate** that feeds its
+tickers/weights/window into the GBM form and derives μ/σ via `estimatePortfolio`.
+Distinct from the investments database: a saved portfolio is a *model
+allocation* to study, not the customer's actual share holdings.
+
+- `lib/models/saved_portfolio.dart`, `lib/services/saved_portfolio_service.dart`
+  — CRUD + live stream, mirroring members/investments.
+- See `docs/superpowers/specs/2026-06-04-saved-portfolios-design.md`.
+
 ## Out of scope (for now)
 
 Correlated multi-asset *path* simulation, fat-tailed/jump models, real-time

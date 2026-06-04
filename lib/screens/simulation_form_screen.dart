@@ -16,10 +16,12 @@ class SimulationFormScreen extends ConsumerStatefulWidget {
     super.key,
     this.initialTickers,
     this.initialWeights,
+    this.initialPeriod,
   });
 
   final List<String>? initialTickers;
   final List<double>? initialWeights;
+  final String? initialPeriod;
 
   @override
   ConsumerState<SimulationFormScreen> createState() =>
@@ -57,6 +59,7 @@ class _SimulationFormScreenState extends ConsumerState<SimulationFormScreen> {
       final est = await ref.read(portfolioServiceProvider).estimate(
             tickers: tickers,
             weights: widget.initialWeights,
+            period: widget.initialPeriod ?? '5y',
           );
       if (!mounted) return;
       setState(() {
