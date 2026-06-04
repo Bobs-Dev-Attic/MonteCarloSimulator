@@ -126,3 +126,89 @@ def _frame_to_history(raw, symbols: list[str]) -> PriceHistory:
     dates = [str(d)[:10] for d in close.index]
     resolved = [str(c) for c in close.columns]
     return PriceHistory(tickers=resolved, prices=prices, dates=dates)
+
+
+def fetch_quotes(tickers: list[str], *, period: str = "5d") -> dict:
+    """Latest available closing price per ticker, for valuing live holdings.
+
+    Unlike :func:`fetch_price_history` (which aligns every ticker onto common
+    trading days for return analysis), quotes are resolved *independently* per
+    ticker — a gap in one symbol must not blank out the others — so each gets
+    its own most recent non-missing close.
+
+    Args:
+        tickers: Ticker symbols to quote.
+        period: Short lookback window; the latest valid close within it is used.
+
+    Returns:
+        ``{"quotes": {TICKER: {"price": float, "as_of": "YYYY-MM-DD"}},
+        "missing": [TICKER, ...]}`` where ``missing`` lists symbols Yahoo
+        returned no usable price for.
+
+    Raises:
+        MarketDataError: on bad input or a failed/empty request.
+    """
+    symbols = [t.strip().upper() for t in tickers if t and t.strip()]
+    if not symbols:
+        raise MarketDataError("no tickers provided")
+
+    try:
+        import yfinance as yf  # lazy: keeps import-time deps minimal
+    except ImportError as exc:  # pragma: no cover - environment-dependent
+        raise MarketDataError(
+            "yfinance is not installed; cannot fetch market data"
+        ) from exc
+
+    try:
+        raw = yf.download(
+            symbols,
+            period=period,
+            interval="1d",
+            auto_adjust=True,
+            progress=False,
+            group_by="column",
+        )
+    except Exception as exc:
+        raise MarketDataError(f"quote request failed: {exc}") from exc
+
+    return _frame_to_quotes(raw, symbols)
+
+
+def _frame_to_quotes(raw, symbols: list[str]) -> dict:
+    """Convert a yfinance DataFrame into per-ticker latest-close quotes.
+
+    Split out from the network call so the parsing rules are unit-testable with
+    a synthetic frame. Symbols with no usable price land in ``missing`` rather
+    than raising, so a single bad ticker never sinks the whole basket.
+    """
+    if raw is None or getattr(raw, "empty", True):
+        raise MarketDataError(
+            "no price data returned (check ticker symbols)"
+        )
+
+    close = raw["Close"] if "Close" in raw.columns else raw
+    if close.ndim == 1:
+        close = close.to_frame()
+
+    quotes: dict[str, dict] = {}
+    missing: list[str] = []
+    columns = {str(c): c for c in close.columns}
+    single = len(close.columns) == 1
+
+    for sym in symbols:
+        # Single-ticker frames may carry a generic column label, not the symbol.
+        col = columns.get(sym, close.columns[0] if single else None)
+        series = close[col].dropna() if col is not None else None
+        if series is None or series.empty:
+            missing.append(sym)
+            continue
+        quotes[sym] = {
+            "price": float(series.iloc[-1]),
+            "as_of": str(series.index[-1])[:10],
+        }
+
+    if not quotes:
+        raise MarketDataError(
+            "no usable prices returned (check ticker symbols)"
+        )
+    return {"quotes": quotes, "missing": missing}

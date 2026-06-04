@@ -111,6 +111,23 @@ yfinance is an unofficial Yahoo Finance client with no SLA, so it is isolated
 behind one module and meant to be paired with caching + manual fallback. See
 `docs/superpowers/specs/2026-06-04-portfolio-yfinance-design.md`.
 
+## Investments database (per customer)
+
+Each household (customer) has a live **investments database** under
+`households/{id}/investments/{id}` — minimal records of `ticker` + `quantity`.
+Holdings are priced live via the `fetchQuotes` Cloud Function (yfinance), so the
+Investments tab shows current market value, a running portfolio total, and a
+**Simulate** button that feeds the basket's tickers and value-weights straight
+into the GBM simulator (which derives μ/σ via `estimatePortfolio`).
+
+- `lib/models/investment.dart`, `lib/services/investment_service.dart` — CRUD +
+  live stream, mirroring the household/member pattern.
+- `lib/services/quote_service.dart` — live prices; `portfolio_service.dart` —
+  the simulate bridge.
+- `functions` `fetchQuotes` callable — latest close per ticker, resolved
+  independently so one bad symbol doesn't blank the basket.
+- See `docs/superpowers/specs/2026-06-04-investments-database-design.md`.
+
 ## Out of scope (for now)
 
 Correlated multi-asset *path* simulation, fat-tailed/jump models, real-time

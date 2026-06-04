@@ -100,6 +100,54 @@ _MODELS = {"gbm": _run_gbm, "retirement": _run_retirement}
 ALLOWED_PERIODS = {"1y", "2y", "5y", "10y", "max"}
 ALLOWED_INTERVALS = {"1d", "1wk", "1mo"}
 MAX_TICKERS = 25
+# Quote requests can value a larger book of holdings in one round-trip.
+MAX_QUOTE_TICKERS = 100
+
+
+def _fetch_quotes(inputs: dict) -> dict:
+    """Latest closing price per ticker, for valuing a customer's holdings.
+
+    Thin wrapper over :func:`montecarlo.marketdata.fetch_quotes` that validates
+    the request shape. Symbols Yahoo has no price for are returned under
+    ``missing`` rather than failing the whole call.
+    """
+    tickers = inputs.get("tickers") or []
+    if not isinstance(tickers, list) or not tickers:
+        raise ValueError("provide a non-empty 'tickers' list")
+    if len(tickers) > MAX_QUOTE_TICKERS:
+        raise ValueError(f"at most {MAX_QUOTE_TICKERS} tickers per request")
+    return marketdata.fetch_quotes([str(t) for t in tickers])
+
+
+@https_fn.on_call(
+    memory=options.MemoryOption.MB_256,
+    timeout_sec=30,
+)
+def fetchQuotes(req: https_fn.CallableRequest) -> dict:
+    """Return the latest closing price for each requested ticker.
+
+    Request data: ``{ "tickers": [str] }``. Response:
+    ``{ "quotes": { TICKER: { "price": float, "as_of": str } },
+    "missing": [str] }``. Used by the client to value a customer's investments
+    database live. Market data comes from Yahoo Finance via yfinance; failures
+    surface as ``UNAVAILABLE``.
+    """
+    if req.auth is None:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.UNAUTHENTICATED,
+            "You must be signed in to fetch quotes.",
+        )
+    try:
+        return _fetch_quotes(req.data or {})
+    except ValueError as exc:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.INVALID_ARGUMENT, str(exc)
+        )
+    except marketdata.MarketDataError as exc:
+        raise https_fn.HttpsError(
+            https_fn.FunctionsErrorCode.UNAVAILABLE,
+            f"Could not fetch quotes: {exc}",
+        )
 
 
 def _estimate_portfolio(inputs: dict) -> dict:

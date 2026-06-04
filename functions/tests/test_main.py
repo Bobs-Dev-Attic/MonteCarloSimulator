@@ -106,3 +106,33 @@ def test_estimate_portfolio_propagates_weights(monkeypatch):
         {"tickers": ["AAPL", "MSFT"], "weights": [3, 1]}
     )
     assert result["weights"] == pytest.approx([0.75, 0.25])
+
+
+# ----------------------- Quote fetch -----------------------------------------
+
+def _fake_quotes(tickers, *, period="5d"):
+    return {
+        "quotes": {t.upper(): {"price": 100.0, "as_of": "2026-06-03"}
+                   for t in tickers},
+        "missing": [],
+    }
+
+
+def test_fetch_quotes_returns_prices(monkeypatch):
+    monkeypatch.setattr(marketdata, "fetch_quotes", _fake_quotes)
+    out = main._fetch_quotes({"tickers": ["aapl", "msft"]})
+    assert out["quotes"]["AAPL"]["price"] == 100.0
+    assert out["missing"] == []
+
+
+def test_fetch_quotes_rejects_empty(monkeypatch):
+    monkeypatch.setattr(marketdata, "fetch_quotes", _fake_quotes)
+    with pytest.raises(ValueError):
+        main._fetch_quotes({"tickers": []})
+
+
+def test_fetch_quotes_enforces_cap(monkeypatch):
+    monkeypatch.setattr(marketdata, "fetch_quotes", _fake_quotes)
+    too_many = [f"T{i}" for i in range(main.MAX_QUOTE_TICKERS + 1)]
+    with pytest.raises(ValueError):
+        main._fetch_quotes({"tickers": too_many})
