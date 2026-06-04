@@ -4,12 +4,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/household.dart';
 import '../models/investment.dart';
 import '../models/member.dart';
+import '../models/saved_portfolio.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/household_service.dart';
 import '../services/investment_service.dart';
 import '../services/member_service.dart';
 import '../services/portfolio_service.dart';
+import '../services/saved_portfolio_service.dart';
 import '../services/quote_service.dart';
 import '../services/simulation_service.dart';
 
@@ -83,3 +85,14 @@ final quotesProvider = FutureProvider.autoDispose
 
 final portfolioServiceProvider =
     Provider<PortfolioService>((ref) => PortfolioService());
+
+final savedPortfolioServiceProvider =
+    Provider<SavedPortfolioService>((ref) => SavedPortfolioService());
+
+/// Live, name-sorted list of a household's saved (model) portfolios.
+/// Keyed by household id.
+final savedPortfoliosProvider = StreamProvider.autoDispose
+    .family<List<SavedPortfolio>, String>(
+  (ref, hid) =>
+      ref.watch(savedPortfolioServiceProvider).watchPortfolios(hid),
+);

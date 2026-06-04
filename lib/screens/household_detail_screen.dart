@@ -4,11 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/household.dart';
 import '../models/investment.dart';
 import '../models/member.dart';
+import '../models/saved_portfolio.dart';
 import '../services/quote_service.dart';
 import '../state/providers.dart';
 import '../widgets/relation_labels.dart';
 import 'investment_form_screen.dart';
 import 'member_form_screen.dart';
+import 'saved_portfolio_form_screen.dart';
 import 'simulation_form_screen.dart';
 
 class HouseholdDetailScreen extends ConsumerWidget {
@@ -35,7 +37,7 @@ class HouseholdDetailScreen extends ConsumerWidget {
           children: [
             _MembersTab(household: household),
             _InvestmentsTab(household: household),
-            const _PortfoliosTab(),
+            _PortfoliosTab(household: household),
           ],
         ),
       ),
@@ -497,18 +499,154 @@ String _formatMoney(double v) {
   return parts[1] == '00' ? grouped : '$grouped.${parts[1]}';
 }
 
-class _PortfoliosTab extends StatelessWidget {
-  const _PortfoliosTab();
+/// Saved (model) portfolios for the household: named baskets of tickers +
+/// target weights that can be re-simulated on demand.
+class _PortfoliosTab extends ConsumerWidget {
+  const _PortfoliosTab({required this.household});
+  final Household household;
 
   @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Text(
-          'Portfolios coming soon',
-          textAlign: TextAlign.center,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(savedPortfoliosProvider(household.id));
+    return Scaffold(
+      body: async.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              e.toString(),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
         ),
+        data: (portfolios) {
+          if (portfolios.isEmpty) {
+            return const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'No portfolios yet. Tap + to model a basket of tickers.',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            );
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.only(bottom: 96),
+            itemCount: portfolios.length,
+            itemBuilder: (_, i) => _PortfolioTile(
+              household: household,
+              portfolio: portfolios[i],
+            ),
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.add),
+        label: const Text('Add portfolio'),
+        onPressed: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                SavedPortfolioFormScreen(householdId: household.id),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PortfolioTile extends ConsumerWidget {
+  const _PortfolioTile({required this.household, required this.portfolio});
+  final Household household;
+  final SavedPortfolio portfolio;
+
+  String _subtitle() {
+    final n = portfolio.holdings.length;
+    final preview = portfolio.tickers.take(4).join(', ');
+    final more = n > 4 ? ' +${n - 4}' : '';
+    return '$n holding${n == 1 ? '' : 's'} · $preview$more';
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete this portfolio?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(savedPortfolioServiceProvider).deletePortfolio(
+            householdId: household.id,
+            portfolioId: portfolio.id,
+          );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
+      }
+    }
+  }
+
+  void _openEdit(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SavedPortfolioFormScreen(
+          householdId: household.id,
+          existing: portfolio,
+        ),
+      ),
+    );
+  }
+
+  void _simulate(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SimulationFormScreen(
+          initialTickers: portfolio.tickers,
+          initialWeights: portfolio.weights,
+          initialPeriod: portfolio.period,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ListTile(
+      leading: const Icon(Icons.pie_chart_outline),
+      title: Text(portfolio.name),
+      subtitle: Text(_subtitle()),
+      onTap: () => _openEdit(context),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextButton.icon(
+            icon: const Icon(Icons.show_chart, size: 18),
+            label: const Text('Simulate'),
+            onPressed: () => _simulate(context),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () => _confirmDelete(context, ref),
+          ),
+        ],
       ),
     );
   }
