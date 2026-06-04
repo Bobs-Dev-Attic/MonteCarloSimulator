@@ -77,5 +77,15 @@ percentages or fractions interchangeably.
   Dart mirrors proven patterns and ships with tests, but must be exercised under
   `flutter test` in CI.
 - **Weights vs. holdings semantics.** Saved weights are target allocations, not
-  share counts; deliberately separate from the investments DB. A future nicety:
-  "save current holdings as a portfolio" using value-weights.
+  share counts; deliberately separate from the investments DB.
+
+## Bridge: "Save current holdings as a portfolio"
+
+The Investments tab header gains a **Save as portfolio** action next to
+**Simulate**. It snapshots the customer's *current* holdings into a new saved
+portfolio using **value-weights** (live `quantity × price`, normalized to
+percentages), opening `SavedPortfolioFormScreen` pre-filled so the advisor just
+names it and tweaks. `SavedPortfolioFormScreen` gains an optional
+`initialHoldings` for this. This connects the two features: actual holdings →
+reusable model allocation. Covered by `investments_tab_test`
+("Save as portfolio opens the form prefilled with holdings").

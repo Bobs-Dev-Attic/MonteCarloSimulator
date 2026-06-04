@@ -357,20 +357,50 @@ class _PortfolioHeader extends StatelessWidget {
                 ],
               ),
             ),
-            FilledButton.tonalIcon(
-              icon: const Icon(Icons.show_chart),
-              label: const Text('Simulate'),
-              onPressed: tickers.isEmpty
-                  ? null
-                  : () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => SimulationFormScreen(
-                            initialTickers: tickers,
-                            initialWeights: weights,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FilledButton.tonalIcon(
+                  icon: const Icon(Icons.show_chart),
+                  label: const Text('Simulate'),
+                  onPressed: tickers.isEmpty
+                      ? null
+                      : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SimulationFormScreen(
+                                initialTickers: tickers,
+                                initialWeights: weights,
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.bookmark_add_outlined, size: 18),
+                  label: const Text('Save as portfolio'),
+                  onPressed: tickers.isEmpty
+                      ? null
+                      : () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SavedPortfolioFormScreen(
+                                householdId: household.id,
+                                initialHoldings: [
+                                  for (var i = 0; i < tickers.length; i++)
+                                    PortfolioHolding(
+                                      ticker: tickers[i],
+                                      // value-weights as rounded percentages
+                                      weight: double.parse(
+                                        (weights[i] * 100).toStringAsFixed(1),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
+                ),
+              ],
             ),
           ],
         ),

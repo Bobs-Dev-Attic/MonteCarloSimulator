@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:monte_carlo_simulator/models/household.dart';
 import 'package:monte_carlo_simulator/screens/household_detail_screen.dart';
 import 'package:monte_carlo_simulator/screens/investment_form_screen.dart';
+import 'package:monte_carlo_simulator/screens/saved_portfolio_form_screen.dart';
 import 'package:monte_carlo_simulator/services/investment_service.dart';
 import 'package:monte_carlo_simulator/services/member_service.dart';
 import 'package:monte_carlo_simulator/services/quote_service.dart';
@@ -136,5 +137,32 @@ void main() {
     await tester.tap(find.text('Add holding'));
     await tester.pumpAndSettle();
     expect(find.byType(InvestmentFormScreen), findsOneWidget);
+  });
+
+  testWidgets('Save as portfolio opens the form prefilled with holdings',
+      (tester) async {
+    final db = await _seed({'AAPL': 10, 'MSFT': 5});
+    final quotes = _FakeQuoteService();
+    when(() => quotes.fetchQuotes(any())).thenAnswer(
+      (_) async => const QuotesResult(
+        quotes: {
+          'AAPL': Quote(price: 150, asOf: '2026-06-03'),
+          'MSFT': Quote(price: 300, asOf: '2026-06-03'),
+        },
+        missing: [],
+      ),
+    );
+
+    await tester.pumpWidget(_host(db, quotes));
+    await _openInvestmentsTab(tester);
+
+    await tester.tap(find.text('Save as portfolio'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SavedPortfolioFormScreen), findsOneWidget);
+    expect(find.text('New portfolio'), findsOneWidget); // app bar title
+    // Tickers are carried into the prefilled rows.
+    expect(find.text('AAPL'), findsOneWidget);
+    expect(find.text('MSFT'), findsOneWidget);
   });
 }

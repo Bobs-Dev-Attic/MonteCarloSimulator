@@ -36,10 +36,15 @@ class SavedPortfolioFormScreen extends ConsumerStatefulWidget {
     super.key,
     required this.householdId,
     this.existing,
+    this.initialHoldings,
   });
 
   final String householdId;
   final SavedPortfolio? existing;
+
+  /// Pre-filled rows for a brand-new portfolio (e.g. "save current holdings").
+  /// Ignored when [existing] is provided.
+  final List<PortfolioHolding>? initialHoldings;
 
   @override
   ConsumerState<SavedPortfolioFormScreen> createState() =>
@@ -63,10 +68,10 @@ class _SavedPortfolioFormScreenState
     final e = widget.existing;
     _nameCtrl = TextEditingController(text: e?.name ?? '');
     _period = e?.period ?? '5y';
-    if (e != null && e.holdings.isNotEmpty) {
+    final seed = e?.holdings ?? widget.initialHoldings;
+    if (seed != null && seed.isNotEmpty) {
       _rows = [
-        for (final h in e.holdings)
-          _Row(ticker: h.ticker, weight: h.weight),
+        for (final h in seed) _Row(ticker: h.ticker, weight: h.weight),
       ];
     } else {
       _rows = [_Row(), _Row()]; // start with two blank rows

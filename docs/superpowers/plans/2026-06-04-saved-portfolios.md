@@ -36,6 +36,14 @@ fake_cloud_firestore.
   saved tickers/weights/period.
 - [x] `test/widgets/portfolios_tab_test.dart`.
 
+## Task 4b: "Save current holdings as a portfolio" bridge  ✅ DONE
+
+- [x] `SavedPortfolioFormScreen` gains optional `initialHoldings` (prefill rows
+  for a new portfolio).
+- [x] Investments tab header **Save as portfolio** action builds value-weighted
+  holdings (percent) from live quotes and opens the prefilled form.
+- [x] `investments_tab_test` covers the prefilled-navigation flow.
+
 ## Task 5: Firestore rule  ✅ DONE (pre-existing)
 
 - [x] `households/{hid}/portfolios/{pid}` rule already present (advisor-of-
