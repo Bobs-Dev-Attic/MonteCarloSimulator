@@ -45,8 +45,9 @@ Flutter + Riverpod + cloud_functions + cloud_firestore; pytest; flutter_test.
   `estimate`).
 - [x] Providers: `investmentServiceProvider`, `investmentsProvider.family`,
   `quoteServiceProvider`, `quotesProvider.family`, `portfolioServiceProvider`.
-- [ ] **Optional:** add a `fake_cloud_functions`/mocktail test for
-  `QuoteService` JSON parsing (parity with `SimulationService`). Run in CI.
+- [x] `QuoteService.parse` extracted as a pure static method; covered by
+  `test/quote_service_test.dart` (quotes/missing/stale + `PortfolioEstimate`).
+  Run in CI.
 
 ## Task 4: Investment form + Investments tab  ✅ DONE (written)
 
@@ -55,9 +56,10 @@ Flutter + Riverpod + cloud_functions + cloud_firestore; pytest; flutter_test.
 - [x] `HouseholdDetailScreen` → 3 tabs; Investments tab with live total,
   `missing` note, per-row market value, and the **Simulate** button computing
   value-weights.
-- [ ] **Widget test** (mirror `test/widgets/`): pump the tab with a
-  `FakeFirebaseFirestore` + overridden `quotesProvider`, assert total and rows.
-  Run in CI.
+- [x] **Widget test** `test/widgets/investments_tab_test.dart`: real
+  `InvestmentService` over `FakeFirebaseFirestore` + mocked `QuoteService`.
+  Asserts live per-row values, the portfolio total, the "no price"/"stale"
+  notes, the empty state, and FAB → form navigation. Run in CI.
 
 ## Task 5: Simulate bridge on the GBM form  ✅ DONE (written)
 

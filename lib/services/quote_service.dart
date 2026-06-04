@@ -47,7 +47,12 @@ class QuoteService {
     final response =
         await callable.call<Map<String, dynamic>>({'tickers': tickers});
     final data = _deepCast(response.data) as Map<String, dynamic>;
+    return parse(data);
+  }
 
+  /// Parses a `fetchQuotes` response map into a [QuotesResult]. Exposed
+  /// (and pure) so the mapping can be unit-tested without a live callable.
+  static QuotesResult parse(Map<String, dynamic> data) {
     final rawQuotes =
         (data['quotes'] as Map?)?.cast<String, dynamic>() ?? const {};
     final quotes = <String, Quote>{
