@@ -21,7 +21,10 @@ void main() {
       expect(h.id, 'h1');
       expect(h.name, 'The Smiths');
       expect(h.advisorIds, ['advisor-1']);
-      expect(h.createdAt, DateTime.utc(2026, 4, 12));
+      expect(
+        h.createdAt.isAtSameMomentAs(DateTime.utc(2026, 4, 12)),
+        isTrue,
+      );
       expect(h.createdBy, 'advisor-1');
     });
 

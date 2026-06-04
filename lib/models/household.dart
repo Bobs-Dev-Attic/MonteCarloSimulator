@@ -28,7 +28,7 @@ class Household {
           .map((e) => e.toString())
           .toList(),
       createdAt:
-          (data['createdAt'] as Timestamp?)?.toDate().toUtc() ?? DateTime.now(),
+          (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       createdBy: (data['createdBy'] as String?) ?? '',
     );
   }
